@@ -1,0 +1,15 @@
+name: C/C++ CI
+
+on: [push]
+
+jobs:
+  Test:
+    runs-on: windows-latest
+    steps:
+      - name: install catch2
+        run: vcpkg install catch
+      - uses: actions/checkout@master
+      - name: build project with cmake
+        run: mkdir build; cd build; cmake .. -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
+      - name: Run test binary
+        run: cd build; cmake --build .; cmake --build . --target RUN_TESTS
