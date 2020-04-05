@@ -5,13 +5,23 @@ os: linux
 matrix:
   include:
     - os: linux
+      env: MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
       addons:
         apt:
           sources: [ 'ubuntu-toolchain-r-test' ]
           packages: [ 'gcc-9', 'g++-9' ]
-      env:
-        - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
-
+    - os: linux
+      env: MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
+      addons:
+        apt:
+          sources: [ 'ubuntu-toolchain-r-test' ]
+          packages: [ 'gcc-7', 'g++-7' ]
+    - os: linux
+      env: MATRIX_EVAL="CC=gcc-5 && CXX=g++-5"
+      addons:
+        apt:
+          sources: [ 'ubuntu-toolchain-r-test' ]
+          packages: [ 'gcc-5', 'g++-5' ]
     - os: linux
       addons:
         apt:
