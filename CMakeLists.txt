@@ -24,6 +24,12 @@ target_include_directories(bitpacker INTERFACE
 
 ## packaging and testing: probably only want if this is not a sub-project
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-    add_subdirectory(tests)
+    option(ENABLE_TESTING "Enable Test Builds" ON)
+    if(ENABLE_TESTING)
+        enable_testing()
+        message("Building Tests...")
+        add_subdirectory(tests)
+    endif()
+
     #add_subdirectory(packaging)
 endif()
