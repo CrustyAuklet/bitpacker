@@ -1,6 +1,7 @@
-#include <array>
+#define BITPACKER_NO_STD_BYTE
 #include "bitpacker/bitpacker.hpp"
 #include "test_common.hpp"
+#include <array>
 
 TEST_CASE("pack and unpack int8_t", "[pack][unpack][specialize]") {
     std::array<uint8_t, 2> buff{0x00, 0x00};

@@ -1,8 +1,9 @@
-#include <array>
-#include <cstddef>
+#define BITPACKER_NO_STD_BYTE
 #include "bitpacker/bitpacker.hpp"
+
 #include "test_common.hpp"
 #include "bitstream.h"
+#include <array>
 
 template <std::size_t SIZE>
 void pack_unsigned_integer(std::array<uint8_t, SIZE>& data, const int offset, const int size, const unsigned value) {

@@ -1,6 +1,7 @@
-#include <array>
+#define BITPACKER_NO_STD_BYTE
 #include "bitpacker/bitpacker.hpp"
 #include "test_common.hpp"
+#include <array>
 
 /************************  Don't affect adjacent bits  ************************/
 
