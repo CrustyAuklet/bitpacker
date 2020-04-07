@@ -5,40 +5,57 @@ os: linux
 matrix:
   include:
     - os: linux
-      env: MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
+      env: CC=gcc-9 CXX=g++-9
       addons:
         apt:
           sources: [ 'ubuntu-toolchain-r-test' ]
           packages: [ 'gcc-9', 'g++-9' ]
     - os: linux
-      env: MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
+      env: CC=gcc-7 CXX=g++-7
       addons:
         apt:
           sources: [ 'ubuntu-toolchain-r-test' ]
           packages: [ 'gcc-7', 'g++-7' ]
     - os: linux
-      env: MATRIX_EVAL="CC=gcc-5 && CXX=g++-5"
+      env: CC=gcc-5 CXX=g++-5
       addons:
         apt:
           sources: [ 'ubuntu-toolchain-r-test' ]
           packages: [ 'gcc-5', 'g++-5' ]
     - os: linux
+      env: CC=clang-9 CXX=clang++-9
       addons:
         apt:
           sources: [ 'ubuntu-toolchain-r-test' ]
           packages: [ 'clang-9' ]
-      env:
-        - MATRIX_EVAL="CC=clang-9 && CXX=clang++-9"
-
-before_install:
-  - eval "${MATRIX_EVAL}"
+    - os: osx
+      osx_image: xcode10.2
+      language: cpp
+      compiler: clang
+#    - os: windows
+#      language: bash
 
 install:
-  - pip install --user conan cmake
-  - conan profile new default --detect
-  - conan profile update settings.compiler.libcxx=libstdc++11 default
+  - |
+    if [[ $TRAVIS_OS_NAME == 'windows' ]]; then
+      choco install conan ninja
+      export PATH=$PATH:"/c/Program Files/Conan/conan"
+    elif [[ $TRAVIS_OS_NAME == 'osx' ]]; then
+      export PATH=~/Library/Python/3.7/bin:$PATH
+      pip3 install --user conan cmake
+    else
+      pip install --user conan cmake
+      conan profile new default --detect
+      conan profile update settings.compiler.libcxx=libstdc++11 default
+    fi
 
 script:
-  - cmake -DCMAKE_BUILD_TYPE=Debug .
-  - cmake --build . -- VERBOSE=1 -j2
-  - cd ./tests && ctest -j2
+  - |
+    if [[ $TRAVIS_OS_NAME == 'windows' ]]; then
+      cmake -DCMAKE_BUILD_TYPE=Release -G Ninja -S . -B build
+      cmake --build build
+    else
+      cmake -DCMAKE_BUILD_TYPE=Release -S . -B build
+      cmake --build build -- VERBOSE=1 -j2
+    fi
+  - cd build/tests && ctest -j2
