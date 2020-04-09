@@ -270,4 +270,236 @@ namespace bitpacker {
         pack_into(buffer, offset, 64, static_cast<uint64_t>(value));
     }
 
+    /***************************************************************************************************
+     * TMP (compile time) pack and unpack functionality
+     ***************************************************************************************************/
+    namespace internal {
+        constexpr bool is_aligned(const size_t bit_offset) noexcept {
+            return (bit_offset % CHAR_BIT) == 0;
+        }
+
+        struct format_string {
+        };
+
+        constexpr bool isFormatMode(char formatChar) {
+            return formatChar == '<' || formatChar == '>';
+        }
+
+        constexpr bool isDigit(char ch) {
+            return ch >= '0' && ch <= '9';
+        }
+
+        constexpr bool isFormatType(char formatChar) {
+            return formatChar == 'u' || formatChar == 's'
+                   || formatChar == 'f' || formatChar == 'b' || formatChar == 't'
+                   || formatChar == 'r' || formatChar == 'p' || formatChar == 'P';
+        }
+
+        constexpr bool isFormatChar(char formatChar) {
+            return isFormatMode(formatChar)
+                   || internal::isFormatType(formatChar)
+                   || internal::isDigit(formatChar);
+        }
+
+        template <size_t Size>
+        constexpr std::pair<size_t, size_t> consumeNumber(const char (&str)[Size], size_t offset) {
+            size_t num = 0;
+            size_t i = offset;
+            for(; isDigit(str[i]) && i < Size; i++) {
+                num = static_cast<size_t>(num*10 + (str[i] - '0'));
+            }
+
+            return {num, i};
+        }
+    } // namespace internal
+
+    // Specifying the format mode
+    template <char FormatChar>
+    struct FormatMode {
+        static_assert(internal::isFormatMode(FormatChar), "Invalid Format Mode passed");
+        static constexpr bool big_endian = false;
+    };
+
+    template <>
+    struct FormatMode<'>'> {
+        static constexpr bool big_endian = true;
+    };
+
+    template <>
+    struct FormatMode<'<'> {
+        static constexpr bool big_endian = false;
+    };
+
+    template <size_t NumBits>
+    using unsigned_type = std::conditional_t<NumBits <= 8, uint8_t,
+            std::conditional_t<NumBits <= 16, uint16_t,
+                    std::conditional_t<NumBits <= 32, uint32_t, uint64_t >>>;
+
+    template <size_t NumBits>
+    using signed_type = std::conditional_t<NumBits <= 8, int8_t,
+            std::conditional_t<NumBits <= 16, int16_t,
+                    std::conditional_t<NumBits <= 32, int32_t, int64_t >>>;
+
+    template <char FormatChar, size_t BitCount>
+    using format_type = std::conditional_t<FormatChar == 'u', unsigned_type<BitCount>,
+            std::conditional_t<FormatChar == 's', signed_type<BitCount>,
+                    std::conditional_t<FormatChar == 'f', float,
+                            std::conditional_t<FormatChar == 'b', bool,
+                                    std::conditional_t<FormatChar == 't', std::array<char, BitCount>,
+                                            std::conditional_t<FormatChar == 'r', std::array<std::byte, BitCount>,
+                                                    void>>>>>>;
+
+    // Specifying the Big Endian format
+    template <char FormatChar, size_t BitCount>
+    struct BigEndianFormat {
+        static_assert(internal::isFormatType(FormatChar), "Invalid Format Char passed");
+        static constexpr size_t bits = BitCount;
+        static constexpr char   format = FormatChar;
+        using rep_type = unsigned_type<BitCount>;
+        using return_type = format_type<FormatChar, BitCount>;
+    };
+
+    struct RawFormatType {
+        char formatChar;
+        size_t count;
+        enum class Endian { big, little } endian;
+
+        [[nodiscard]] constexpr bool isString() const {
+            return formatChar == 't';
+        }
+        [[nodiscard]] constexpr bool isBytes() const {
+            return formatChar == 'r';
+        }
+    };
+
+    template <typename Fmt>
+    constexpr bool validate_format(Fmt f) {
+        for(size_t i = 0; i < Fmt::size(); i++) {
+            auto currentChar = Fmt::at(i);
+            if(internal::isFormatMode(currentChar)) {
+                if(++i == Fmt::size()){
+                    break;
+                }
+            }
+
+            if(!internal::isFormatType(Fmt::at(i++))) {
+                return false;
+            }
+
+            const auto num_and_offset = internal::consumeNumber(Fmt::value(), i);
+            i = num_and_offset.second;
+            --i; // to combat the i++ in the loop
+            if(num_and_offset.first == 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// count the number of items in the format
+    /// @param array_as_one [IN] if true, count byte/char aray as one item (default)
+    template <typename Fmt>
+    constexpr size_t countItems(Fmt f, const bool array_as_one = true) {
+        static_assert(bitpacker::validate_format(Fmt{}), "Invalid Format!");
+        size_t itemCount = 0;
+        bool   is_bytes = false;
+
+        for(size_t i = 0; i < Fmt::size(); i++) {
+            auto currentChar = Fmt::at(i);
+            if(internal::isFormatMode(currentChar)) {
+                continue;
+            }
+
+            if(internal::isFormatType(currentChar)) {
+                is_bytes = (currentChar == 't' || currentChar == 'r');
+                currentChar = Fmt::at(++i);
+            }
+
+            if (internal::isDigit(currentChar)) {
+                const auto num_and_offset = internal::consumeNumber(Fmt::value(), i);
+
+                itemCount += is_bytes && !array_as_one ? num_and_offset.first : 1;
+                i = num_and_offset.second;
+                --i; // to combat the i++ in the loop
+            }
+            is_bytes = false;
+        }
+        return itemCount;
+    }
+
+    template <typename Fmt>
+    constexpr std::array<RawFormatType, countItems(Fmt{})> get_type_array(Fmt f) {
+        std::array<RawFormatType, countItems(Fmt{})> arr{};
+        size_t currentType = 0;
+        RawFormatType::Endian currentEndian = RawFormatType::Endian::big;
+
+        for(size_t i = 0; i < Fmt::size(); i++) {
+            auto currentChar = Fmt::at(i);
+            if(internal::isFormatMode(currentChar)) {
+                currentEndian = currentChar == '>' ? RawFormatType::Endian::big : RawFormatType::Endian::little;
+                continue;
+            }
+
+            if(internal::isFormatType(currentChar)) {
+                const auto num_and_offset = internal::consumeNumber(Fmt::value(), ++i);
+                arr[currentType].formatChar = currentChar;
+                arr[currentType].endian     = currentEndian;
+                arr[currentType].count      = num_and_offset.first;
+                ++currentType;
+
+                i = num_and_offset.second;
+                i--; // to combat the i++ in the loop
+            }
+        }
+        return arr;
+    }
+
+    /// Count the bits used by the given format
+    template <typename Fmt>
+    constexpr size_t countBits(Fmt f) {
+        constexpr auto type_array = get_type_array(Fmt{});
+        size_t bitCount = 0;
+
+        for(const auto& type : type_array) {
+            if(type.isString() || type.isBytes()) {
+                bitCount += type.count*8;
+            }
+            else {
+                bitCount += type.count;
+            }
+        }
+        return bitCount;
+    }
+
+    template <size_t Item, typename Fmt>
+    constexpr RawFormatType getTypeOfItem(Fmt f) {
+        static_assert(Item < countItems(Fmt{}), "Invalid format item index!");
+        constexpr auto type_array = get_type_array(Fmt{});
+        return type_array[Item];
+    }
+
+    template <size_t Item, typename Fmt>
+    constexpr size_t getBitOffset(Fmt f) {
+        constexpr auto type_array = get_type_array(Fmt{});
+        size_t offset = 0;
+        for(size_t i = 0; i < Item; ++i) {
+            if(type_array[i].isString() || type_array[i].isBytes()) {
+                offset += type_array[i].count*8;
+            }
+            else {
+                offset += type_array[i].count;
+            }
+        }
+        return offset;
+    }
+
 } // namespace bitpacker
+
+#define BP_STRING(s) [] { \
+    struct S : bitpacker::internal::format_string { \
+      static constexpr decltype(auto) value() { return s; } \
+      static constexpr size_t size() { return std::size(value()) - 1; }  \
+      static constexpr auto at(size_t i) { return value()[i]; }; \
+    }; \
+    return S{}; \
+  }()

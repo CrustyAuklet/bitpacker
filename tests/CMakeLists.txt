@@ -26,24 +26,40 @@ endif()
 
 add_library(pybitstruct STATIC bitstream.h bitstream.c)
 
-add_executable(bitpacker_tests)
-target_link_libraries(bitpacker_tests PRIVATE catch_main bitpacker::bitpacker pybitstruct)
-
-target_sources(bitpacker_tests PRIVATE
-    test_compare_to_bitstruct.cpp
-
+add_executable(bitpacker_test_core)
+target_link_libraries(bitpacker_test_core PRIVATE catch_main bitpacker::bitpacker)
+target_sources(bitpacker_test_core PRIVATE
     test_common.hpp
     test_pack_impl.cpp
     test_unpack_impl.cpp
     test_specializations.cpp
 )
 
+add_executable(bitpacker_test_against_pybitstruct)
+target_link_libraries(bitpacker_test_against_pybitstruct PRIVATE catch_main bitpacker::bitpacker pybitstruct)
+target_sources(bitpacker_test_against_pybitstruct PRIVATE
+        test_common.hpp
+        test_compare_to_bitstruct.cpp
+    )
+
+add_executable(bitpacker_test_tmp_helpers)
+target_link_libraries(bitpacker_test_tmp_helpers PRIVATE catch_main bitpacker::bitpacker)
+target_sources(bitpacker_test_tmp_helpers PRIVATE
+        test_common.hpp
+        test_tmp_helpers.cpp
+    )
+
 # prevents the adding of catch test projects to our project
 set_property(GLOBAL PROPERTY CTEST_TARGETS_ADDED 1)
 include(Catch)
 
-# uses --list-test-names-only of test executable to find test names! great!
-catch_discover_tests(
-    bitpacker_tests
+catch_discover_tests(bitpacker_test_core
+    EXTRA_ARGS -s --reporter=xml --out=tests.xml
+)
+catch_discover_tests(bitpacker_test_against_pybitstruct
+    EXTRA_ARGS -s --reporter=xml --out=tests.xml
+)
+
+catch_discover_tests(bitpacker_test_tmp_helpers
     EXTRA_ARGS -s --reporter=xml --out=tests.xml
 )
