@@ -133,13 +133,16 @@ namespace bitpacker {
 
         template<typename T, size_t BitSize>
         constexpr signed_type<BitSize> sign_extend(T val) noexcept {
+            using return_type = signed_type<BitSize>;
             static_assert( std::is_unsigned<T>::value && std::is_integral<T>::value, "ValueType needs to be an unsigned integral type");
-            constexpr T upper_mask = static_cast<T>(~((1U<<BitSize)-1));
-            constexpr T msb = 1U << (BitSize-1);
-            if(val & msb) {
-                return static_cast< signed_type<BitSize> >( val | upper_mask );
+            if (BitSize % ByteSize != 0) {
+                const T upper_mask = static_cast<T>(~((static_cast<return_type>(1U) << BitSize) - 1));
+                const T msb = static_cast<return_type>(1U) << (BitSize - 1);
+                if (val & msb) { 
+                    return static_cast<return_type>(val | upper_mask);
+                }
             }
-            return static_cast< signed_type<BitSize> >( val );
+            return static_cast<return_type>(val);
         }
 
     }  // implementation namespace
