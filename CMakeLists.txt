@@ -13,7 +13,6 @@ target_compile_features(bitpacker INTERFACE cxx_std_17)
 
 target_sources(bitpacker INTERFACE
     include/bitpacker/bitpacker.hpp
-    include/nonstd/span.hpp
 )
 
 target_include_directories(bitpacker INTERFACE

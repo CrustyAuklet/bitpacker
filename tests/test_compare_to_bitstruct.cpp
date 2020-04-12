@@ -1,6 +1,3 @@
-#define BITPACKER_NO_STD_BYTE
-#include "bitpacker/bitpacker.hpp"
-
 #include "test_common.hpp"
 #include "bitstream.h"
 #include <array>

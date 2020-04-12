@@ -1,3 +1,12 @@
+
+#include "span.hpp"
+
+namespace bitpacker {
+    using nonstd::span;
+}
+
+#include "bitpacker/bitpacker.hpp"
+
 #include <iostream>
 #include <sstream>
 #include <cstddef>

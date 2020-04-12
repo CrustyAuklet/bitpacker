@@ -42,9 +42,9 @@ install:
       export PATH=$PATH:"/c/Program Files/Conan/conan"
     elif [[ $TRAVIS_OS_NAME == 'osx' ]]; then
       export PATH=~/Library/Python/3.7/bin:$PATH
-      pip3 install --user conan cmake
+      pip install --user conan cmake bitstruct
     else
-      pip install --user conan cmake
+      pip install --user conan cmake bitstruct
       conan profile new default --detect
       conan profile update settings.compiler.libcxx=libstdc++11 default
     fi
