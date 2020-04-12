@@ -1,7 +1,12 @@
 find_package(Catch2 QUIET)
 
-add_library(catch_main STATIC test_main.cpp)
+add_library(catch_main STATIC )
 target_compile_features(catch_main PUBLIC cxx_std_17)
+target_sources(catch_main PUBLIC
+        test_main.cpp
+        test_common.hpp
+        constexpr_helpers.h
+        )
 
 if(Catch2_FOUND)
     target_link_libraries(catch_main PUBLIC Catch2::Catch2)
@@ -29,24 +34,22 @@ add_library(pybitstruct STATIC bitstream.h bitstream.c)
 add_executable(bitpacker_test_core)
 target_link_libraries(bitpacker_test_core PRIVATE catch_main bitpacker::bitpacker)
 target_sources(bitpacker_test_core PRIVATE
-    test_common.hpp
     test_pack_impl.cpp
     test_unpack_impl.cpp
-    test_specializations.cpp
+#    test_specializations.cpp
 )
 
 add_executable(bitpacker_test_against_pybitstruct)
 target_link_libraries(bitpacker_test_against_pybitstruct PRIVATE catch_main bitpacker::bitpacker pybitstruct)
 target_sources(bitpacker_test_against_pybitstruct PRIVATE
-        test_common.hpp
         test_compare_to_bitstruct.cpp
+        test_compare_to_python.cpp
     )
 
 add_executable(bitpacker_test_tmp_helpers)
 target_link_libraries(bitpacker_test_tmp_helpers PRIVATE catch_main bitpacker::bitpacker)
 target_sources(bitpacker_test_tmp_helpers PRIVATE
-        test_common.hpp
-        test_tmp_helpers.cpp
+        test_tmp_formats.cpp
     )
 
 # prevents the adding of catch test projects to our project
