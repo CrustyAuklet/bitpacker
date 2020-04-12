@@ -13,7 +13,7 @@ void pack_unsigned_integer(std::array<uint8_t, SIZE>& data, const int offset, co
     bitstream_writer_bounds_restore(&bounds);
 }
 
-TEST_CASE() {
+TEST_CASE("compare to bitstruct: pack aligned", "[bitpacker::bitstruct]") {
     std::array<uint8_t, 3> buff{0xFF, 0xFF, 0xFF};
     std::array<uint8_t, 3> buff2{0xFF, 0xFF, 0xFF};
     const unsigned offset = 4;
@@ -26,7 +26,7 @@ TEST_CASE() {
     REQUIRE( buff == buff2 );
 }
 
-TEST_CASE() {
+TEST_CASE("compare to bitstruct: unaligned", "[bitpacker::bitstruct]") {
     std::array<uint8_t, 3> buff{0xFF, 0xFF, 0xFF};
     std::array<uint8_t, 3> buff2{0xFF, 0xFF, 0xFF};
     const unsigned offset = 4;
@@ -39,7 +39,7 @@ TEST_CASE() {
     REQUIRE( buff == buff2 );
 }
 
-TEST_CASE() {
+TEST_CASE("compare to bitstruct: across 3 bytes", "[bitpacker::bitstruct]") {
     std::array<uint8_t, 4> buff{0xFF, 0xFF, 0xFF, 0xFF};
     std::array<uint8_t, 4> buff2{0xFF, 0xFF, 0xFF, 0xFF};
     const unsigned offset = 4;
