@@ -97,7 +97,6 @@ auto runPythonPack(Fmt, const Args&... toPack) {
     // Create the python script
     std::string packedBinaryFilePath = std::tmpnam(nullptr);
     std::string pythonScript = buildPythonScript(Fmt{}, packedBinaryFilePath, toPack...);
-    std::cout << pythonScript << std::endl;
 
     // Write the python script
     std::string pythonScriptPath = std::tmpnam(nullptr);
@@ -133,21 +132,128 @@ auto runPythonPack(Fmt, const Args&... toPack) {
     return outputBuffer;
 }
 
+std::string print_data_vector(const std::vector<char> &vec) {
+    std::stringstream ss;
+    ss << "{";
+    for (const auto &v : vec) {
+        ss << " 0x" << std::hex << (static_cast<unsigned>(v) & 0xFFU) << ",";
+    }
+    ss << " }";
+    return ss.str();
+}
+
+template <typename T>
+std::string print_tuple_value(const T v) {
+    std::stringstream ss;
+    if constexpr (std::is_same_v<T, char> || std::is_same_v<T, unsigned char>) {
+        ss << static_cast<int>(v);
+    }
+    else {
+        ss << v;
+    }
+    return ss.str();
+}
+
+template <class TupType, size_t... I>
+std::string print_data_tuple(const TupType &_tup, std::index_sequence<I...>) {
+    std::stringstream ss;
+    ss << "{ ";
+    (..., (ss << (I == 0 ? "" : ", ") << std::hex
+              << print_tuple_value(std::get<I>(_tup))));
+    ss << " }";
+    return ss.str();
+}
+
+template <class... T>
+std::string print_data_tuple(const std::tuple<T...> &_tup) {
+    return print_data_tuple(_tup, std::make_index_sequence<sizeof...(T)>());
+}
+
 template <typename Fmt, typename... Args>
 void testPackAgainstPython(Fmt, const Args&... toPack) {
     //auto packed = bitpacker::pack(Fmt{}, toPack...);
     auto pythonPacked = runPythonPack(Fmt{}, toPack...);
 
     //CAPTURE(packed);
-    CAPTURE(pythonPacked);
+    INFO("From Python-pack: " << print_data_vector(pythonPacked));
 
     //REQUIRE(packed.size() == pythonPacked.size());
     //REQUIRE(std::equal(packed.begin(), packed.end(), pythonPacked.begin()));
+    
     bitpacker::span<const bitpacker::byte_type> buffer(reinterpret_cast<uint8_t*>(pythonPacked.data()), pythonPacked.size() );
     auto unpacked = bitpacker::unpack(Fmt{}, buffer);
-    REQUIRE( unpacked == std::make_tuple(toPack...) );
+
+    INFO("Unpacked by Bitpacker: " << print_data_tuple(unpacked));
+    INFO("Expected: " << print_data_tuple(std::make_tuple(toPack...)));
+    REQUIRE( unpacked == std::make_tuple(toPack...));
 }
 
-TEST_CASE("integers - single items", "[bitpacker::binary_compat]") {
+TEST_CASE("compare to python: single unsigned integers", "[bitpacker::binary_compat]") {
+    testPackAgainstPython(BP_STRING("u1"), 0b1U);
+    testPackAgainstPython(BP_STRING("u1"), 0b0U);
+    testPackAgainstPython(BP_STRING("u4"), 0b1010U);
+    testPackAgainstPython(BP_STRING("u10"), 0b11'1010'0101U);
+    testPackAgainstPython(BP_STRING("u12"), 0b1001'1010'0101U);
+    testPackAgainstPython(BP_STRING("u30"), 0b10'1001'1010'0110'0101'0011'1100'0110U);
+    testPackAgainstPython(BP_STRING("u43"), 0b110'1001'1010'0110'0101'0011'1100'0110'1001'1010'0101U);
+    testPackAgainstPython(BP_STRING("u64"), 0xDEADBEEFCAFEBABE);
+
+    testPackAgainstPython(BP_STRING("u64"), 0xDEADBEEFCAFEBABE);
+}
+
+TEST_CASE("compare to python: multiple unsigned integers", "[bitpacker::binary_compat]") {
     testPackAgainstPython(BP_STRING("u4u4u8u3u5"), 5, 2, 0xff, 5, 0b11010U);
+
+    testPackAgainstPython(BP_STRING("u4u10u12"), 0b1010U, 0b11'1010'0101U, 0b1001'1010'0101U);
+
+    testPackAgainstPython(BP_STRING("u4u10u12u30u43u64"),
+            0b1010U,
+            0b11'1010'0101U,
+            0b1001'1010'0101U,
+            0b10'1001'1010'0110'0101'0011'1100'0110U,
+            0b110'1001'1010'0110'0101'0011'1100'0110'1001'1010'0101U,
+            0xDEADBEEFCAFEBABE);
+}
+
+TEST_CASE("compare to python: single signed integers", "[bitpacker::binary_compat]") {
+    // -1 creates all 1's
+    testPackAgainstPython(BP_STRING("s1"), -1);
+    testPackAgainstPython(BP_STRING("s4"), -1);
+    testPackAgainstPython(BP_STRING("s10"), -1);
+    testPackAgainstPython(BP_STRING("s12"), -1);
+    testPackAgainstPython(BP_STRING("s30"), -1);
+    testPackAgainstPython(BP_STRING("s43"), -1);
+    testPackAgainstPython(BP_STRING("s64"), -1);
+
+    // random negative values, somewhat large
+    testPackAgainstPython(BP_STRING("s4"), -5);
+    testPackAgainstPython(BP_STRING("s10"), -500);
+    testPackAgainstPython(BP_STRING("s12"), -1040);
+    testPackAgainstPython(BP_STRING("s30"), -536870911);
+    testPackAgainstPython(BP_STRING("s43"), -4398046509981ll);
+    testPackAgainstPython(BP_STRING("s64"), -9223372036742463338ll);
+
+    // some positive values
+    testPackAgainstPython(BP_STRING("s1"), 0);
+    testPackAgainstPython(BP_STRING("s4"), 5);
+    testPackAgainstPython(BP_STRING("s10"), 500);
+    testPackAgainstPython(BP_STRING("s12"), 2'000);
+    testPackAgainstPython(BP_STRING("s30"), 536'870'000);
+    testPackAgainstPython(BP_STRING("s43"), 4'358'146'411'000ll);
+    testPackAgainstPython(BP_STRING("s64"), 8'213'362'026'654'675'200ll);
+}
+
+TEST_CASE("compare to python: multiple signed integers", "[bitpacker::binary_compat]") {
+    testPackAgainstPython(BP_STRING("s4s4s8s3s5"), -8, -5, -115, -3, -10);
+
+    testPackAgainstPython(BP_STRING("s4s10s12s30s43s64"), -1, -1, -1, -1, -1, -1);
+
+    testPackAgainstPython(BP_STRING("s4s10s12s30s43s64"), 
+        -5, -500, -1040, -536'870'911, -4'398'046'509'981ll, -9'223'372'036'742'463'338ll);
+
+    testPackAgainstPython(BP_STRING("s4s10s12s30s43s64"),
+        5, 500, 2'000, 536'870'000, 4'358'146'411'000ll, 8'213'362'026'654'675'200ll);
+
+    testPackAgainstPython(BP_STRING("s4s2s10s12s30s43s64s4s10s12"),
+        5, -1, 500, -2'000, 536'870'000, -4'358'146'411'000ll, 8'213'362'026'654'675'200ll, -5, 500, -2'000);
 }
