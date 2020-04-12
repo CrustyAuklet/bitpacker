@@ -102,3 +102,4 @@ TEST_CASE("calculate format size", "[format]") {
     REQUIRE_STATIC(bitpacker::calcsize(BP_STRING("u4f16<b2s12t10r10f32p2P2") ) == 230 );
     REQUIRE_STATIC(bitpacker::calcsize(BP_STRING("u4<f16b2>s12t10r10f32p2P2")) == 230 );
 }
+

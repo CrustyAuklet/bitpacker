@@ -105,8 +105,14 @@ auto runPythonPack(Fmt, const Args&... toPack) {
     pythonScriptFile.write(pythonScript.data(), pythonScript.size());
     pythonScriptFile.close(); // Flush to disk
 
+    std::string scriptRunCommand = "python";
+    const char* pyName = getenv("CI_PYTHON_NAME");
+    if(pyName != nullptr) {
+        scriptRunCommand = std::string(pyName);
+    }
+
     // Run the python script
-    std::string scriptRunCommand = "python " + pythonScriptPath;
+    scriptRunCommand += " " + pythonScriptPath;
     auto retVal = system(scriptRunCommand.c_str());
     if(retVal != 0) {
         FAIL("Python run failed with error code " << retVal);

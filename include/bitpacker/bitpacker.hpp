@@ -133,7 +133,7 @@ namespace bitpacker {
 
         template<typename T, size_t BitSize>
         constexpr signed_type<BitSize> sign_extend(T val) noexcept {
-            static_assert( std::is_unsigned_v<T> && std::is_integral_v<T>, "ValueType needs to be an unsigned integral type");
+            static_assert( std::is_unsigned<T>::value && std::is_integral<T>::value, "ValueType needs to be an unsigned integral type");
             constexpr T upper_mask = static_cast<T>(~((1U<<BitSize)-1));
             constexpr T msb = 1U << (BitSize-1);
             if(val & msb) {
@@ -221,6 +221,7 @@ namespace bitpacker {
     template <typename T>
     constexpr void store(span<byte_type> buffer, size_type offset, T value) noexcept;
 
+#if bitpacker_CPP17_OR_GREATER
     /***************************************************************************************************
      * TMP (compile time) pack and unpack functionality (C++17 required)
      ***************************************************************************************************/
@@ -539,3 +540,7 @@ namespace bitpacker {
     }; \
     return S{}; \
   }()
+
+#else
+} // namespace bitpacker
+#endif  // bitpacker_CPP17_OR_GREATER

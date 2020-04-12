@@ -9,7 +9,15 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
 add_library(bitpacker INTERFACE)
 add_library(bitpacker::bitpacker ALIAS bitpacker)
-target_compile_features(bitpacker INTERFACE cxx_std_17)
+
+option(BITPACKER_USE_CXX17 "enable C++17 features for bitpacker" ON)
+if(BITPACKER_USE_CXX17)
+    message("Using C++17 bitpacker features...")
+    target_compile_features(bitpacker INTERFACE cxx_std_17)
+else()
+    message("Using Bitpacker in C++14 mode...")
+    target_compile_features(bitpacker INTERFACE cxx_std_14)
+endif()
 
 target_sources(bitpacker INTERFACE
     include/bitpacker/bitpacker.hpp

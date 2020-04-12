@@ -17,7 +17,7 @@ matrix:
           sources: [ 'ubuntu-toolchain-r-test' ]
           packages: [ 'gcc-7', 'g++-7' ]
     - os: linux
-      env: CC=gcc-5 CXX=g++-5
+      env: CC=gcc-5 CXX=g++-5 USE_CXX14=true
       addons:
         apt:
           sources: [ 'ubuntu-toolchain-r-test' ]
@@ -32,6 +32,7 @@ matrix:
       osx_image: xcode10.2
       language: cpp
       compiler: clang
+      env: CI_PYTHON_NAME=python3
 #    - os: windows
 #      language: bash
 
@@ -42,7 +43,7 @@ install:
       export PATH=$PATH:"/c/Program Files/Conan/conan"
     elif [[ $TRAVIS_OS_NAME == 'osx' ]]; then
       export PATH=~/Library/Python/3.7/bin:$PATH
-      pip install --user conan cmake bitstruct
+      pip3 install --user conan cmake bitstruct
     else
       pip install --user conan cmake bitstruct
       conan profile new default --detect
@@ -54,6 +55,9 @@ script:
     if [[ $TRAVIS_OS_NAME == 'windows' ]]; then
       cmake -DCMAKE_BUILD_TYPE=Release -G Ninja -S . -B build
       cmake --build build
+    elif [[ $USE_CXX14  ]]; then
+      cmake -DCMAKE_BUILD_TYPE=Release -DBITPACKER_USE_CXX17=OFF -S . -B build
+      cmake --build build -- VERBOSE=1 -j2
     else
       cmake -DCMAKE_BUILD_TYPE=Release -S . -B build
       cmake --build build -- VERBOSE=1 -j2
