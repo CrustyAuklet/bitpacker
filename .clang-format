@@ -20,7 +20,7 @@ AlwaysBreakTemplateDeclarations: Yes
 BreakBeforeBraces: Stroustrup
 BreakConstructorInitializers: AfterColon
 BreakInheritanceList: AfterColon
-ColumnLimit: 120
+ColumnLimit: 0
 CompactNamespaces: false
 Cpp11BracedListStyle: true
 DerivePointerAlignment: false
@@ -40,9 +40,10 @@ SpaceBeforeInheritanceColon: true
 SpaceBeforeParens: ControlStatements
 SpaceBeforeRangeBasedForLoopColon: true
 SpaceInEmptyParentheses: false
+SpacesInAngles: true
 SpacesBeforeTrailingComments: 2
 SpacesInContainerLiterals: true
-Standard: Cpp03
+Standard: Cpp11
 TabWidth: 4
 UseTab: Never
 BraceWrapping:
