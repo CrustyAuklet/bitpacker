@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <climits>
+#include <limits>
 #include <type_traits>
 #include <tuple>
 
@@ -61,7 +62,7 @@ namespace bitpacker {
     static_assert(CHAR_BIT == 8, "The target system has bytes that are not 8 bits!");
     static_assert(static_cast<unsigned>(-1) == ~0U, "The target system is not 2's compliment! Default pack specializations will not work!");
     static_assert(
-#if bitpacker_CPP17_OR_GREATER
+#if bitpacker_CPP17_OR_GREATER && defined(BITPACKER_USE_STD_BYTE)
             std::is_same<byte_type, std::byte>::value ||
 #endif
             std::is_unsigned<byte_type>::value && std::is_integral<byte_type>::value && sizeof(byte_type) == 1U,
@@ -110,7 +111,7 @@ namespace bitpacker {
         }
         /// create mask from the nth bit from the MSB to bit 0 (inclusive)
         constexpr byte_type right_mask(const size_type n) noexcept {
-            return static_cast<byte_type>((1U << (8 - n)) - 1);
+            return static_cast< byte_type >((1U << (ByteSize - n)) - 1);
         }
         /// create mask from the nth bit from the MSB to bit 8 (inclusive)
         constexpr byte_type left_mask(const size_type n) noexcept {
@@ -235,26 +236,34 @@ namespace bitpacker {
         struct format_string {
         };
 
-        constexpr bool isFormatMode(char formatChar) {
+        constexpr bool isFormatMode(char formatChar) noexcept {
             return formatChar == '<' || formatChar == '>';
         }
 
-        constexpr bool isDigit(char ch) {
+        constexpr bool isDigit(char ch) noexcept {
             return ch >= '0' && ch <= '9';
         }
 
-        constexpr bool isFormatType(char formatChar) {
+        constexpr bool isFormatType(char formatChar) noexcept {
             return formatChar == 'u' || formatChar == 's'
                    || formatChar == 'f' || formatChar == 'b' || formatChar == 't'
                    || formatChar == 'r' || formatChar == 'p' || formatChar == 'P';
         }
 
-        constexpr bool isFormatChar(char formatChar) {
+        constexpr bool isPadding(char ch) noexcept {
+            return ch == 'p' || ch == 'P';
+        }
+
+        constexpr bool isByteType(char ch) noexcept {
+            return ch == 't' || ch == 'r';
+        }
+
+        constexpr bool isFormatChar(char formatChar) noexcept {
             return isFormatMode(formatChar) || isFormatType(formatChar) || isDigit(formatChar);
         }
 
         template <size_t Size>
-        constexpr std::pair<size_t, size_t> consume_number(const char (&str)[Size], size_t offset) {
+        constexpr std::pair< size_t, size_t > consume_number(const char (&str)[Size], size_t offset) {
             size_t num = 0;
             size_t i = offset;
             for(; isDigit(str[i]) && i < Size; i++) {
@@ -268,268 +277,214 @@ namespace bitpacker {
             little
         };
 
-    } // implementation namespace
+        template <char FormatChar, size_t BitCount>
+        using format_type = std::conditional_t<FormatChar == 'u', impl::unsigned_type<BitCount>,
+                std::conditional_t<FormatChar == 's', impl::signed_type<BitCount>,
+                        std::conditional_t<FormatChar == 'f', float,
+                                std::conditional_t<FormatChar == 'b', bool,
+                                        std::conditional_t<FormatChar == 't', std::array<char, BitCount>,
+                                                std::conditional_t<FormatChar == 'r', std::array<byte_type, BitCount>,
+                                                        void>>>>>>;
 
-    // Specifying the format mode
-    template <char FormatChar>
-    struct FormatMode {
-        static_assert(impl::isFormatMode(FormatChar), "Invalid Format Mode passed");
-        static constexpr bool big_endian = false;
-    };
+        struct RawFormatType {
+            char formatChar;
+            size_t count;
+            size_t offset;
+            impl::Endian endian;
+        };
 
-    template <>
-    struct FormatMode<'>'> {
-        static constexpr bool big_endian = true;
-    };
+        // Specifying the Big Endian format
+        template <char FormatChar, size_t BitCount, impl::Endian BitEndianess>
+        struct FormatType {
+            static constexpr impl::Endian bit_endian = BitEndianess;
+            static constexpr size_t bits = BitCount;        // also used for byte count for 't' and 'r' formats
+            static constexpr char format = FormatChar;
+            using return_type = format_type<FormatChar, BitCount>;
+            using rep_type = impl::unsigned_type<BitCount>;
+        };
 
-    template <>
-    struct FormatMode<'<'> {
-        static constexpr bool big_endian = false;
-    };
-
-    template <char FormatChar, size_t BitCount>
-    using format_type = std::conditional_t<FormatChar == 'u', impl::unsigned_type<BitCount>,
-            std::conditional_t<FormatChar == 's', impl::signed_type<BitCount>,
-                    std::conditional_t<FormatChar == 'f', float,
-                            std::conditional_t<FormatChar == 'b', bool,
-                                    std::conditional_t<FormatChar == 't', std::array<char, BitCount>,
-                                            std::conditional_t<FormatChar == 'r', std::array<byte_type, BitCount>,
-                                                    void>>>>>>;
-
-    struct RawFormatType {
-        char formatChar;
-        size_t count;
-        impl::Endian endian;
-
-        [[nodiscard]] constexpr bool isString() const {
-            return formatChar == 't';
-        }
-        [[nodiscard]] constexpr bool isBytes() const {
-            return formatChar == 'r';
-        }
-    };
-
-    // Specifying the Big Endian format
-    template <char FormatChar, size_t BitCount, impl::Endian BitEndianess>
-    struct FormatType {
-        static_assert(impl::isFormatType(FormatChar), "Invalid Format Char passed");
-    };
-
-    // Specifying the Big Endian format
-    template <size_t BitCount>
-    struct FormatType<'u', BitCount, impl::Endian::big> {
-        static constexpr impl::Endian bit_endian = impl::Endian::big;
-        static constexpr size_t bits = BitCount;
-        static constexpr char   format = 'u';
-        using return_type = format_type<'u', BitCount>;
-        using rep_type = impl::unsigned_type<BitCount>;
-        static constexpr return_type convert(rep_type v) noexcept { return v; }
-    };
-
-    // Specifying the Big Endian format
-    template <size_t BitCount>
-    struct FormatType<'s', BitCount, impl::Endian::big> {
-        static constexpr impl::Endian bit_endian = impl::Endian::big;
-        static constexpr size_t bits = BitCount;
-        static constexpr char   format = 's';
-        using return_type = format_type<'s', BitCount>;
-        using rep_type = impl::unsigned_type<BitCount>;
-        static constexpr return_type convert(rep_type v) noexcept {
-            return impl::sign_extend<decltype(v), BitCount >(v);
-        }
-    };
-
-    // Specifying the Big Endian format
-    template <size_t BitCount>
-    struct FormatType<'b', BitCount, impl::Endian::big> {
-        static constexpr impl::Endian bit_endian = impl::Endian::big;
-        static constexpr size_t bits = BitCount;
-        static constexpr char   format = 'b';
-        using return_type = format_type<'b', BitCount>;
-        using rep_type = impl::unsigned_type<BitCount>;
-        static constexpr return_type convert(rep_type v) noexcept {
-            return static_cast<bool>(v);
-        }
-    };
-
-    // Specifying the Big Endian format
-    template <size_t BitCount>
-    struct FormatType<'f', BitCount, impl::Endian::big> {
-        static_assert(BitCount == 16 || BitCount == 32 || BitCount == 64, "Expected float size of 16, 32, or 64 bits");
-        static constexpr impl::Endian bit_endian = impl::Endian::big;
-        static constexpr size_t bits = BitCount;
-        static constexpr char   format = 'f';
-        using return_type = format_type<'f', BitCount>;
-        using rep_type = impl::unsigned_type<BitCount>;
-        static constexpr return_type convert(rep_type v) noexcept {
-            static_assert(BitCount == 0, "Float decoding not implemented!");
-            // TODO: convert to float
-            return 0.0F;
-        }
-    };
-
-    template <typename Fmt>
-    constexpr bool validate_format(Fmt f) {
-        for(size_t i = 0; i < Fmt::size(); i++) {
-            auto currentChar = Fmt::at(i);
-            if(impl::isFormatMode(currentChar)) {
-                if(++i == Fmt::size()){
-                    break;
+        template <typename Fmt>
+        constexpr bool validate_format(Fmt f) noexcept {
+            for(size_t i = 0; i < Fmt::size(); i++) {
+                auto currentChar = Fmt::at(i);
+                if(impl::isFormatMode(currentChar)) {
+                    if(++i == Fmt::size()){
+                        break;
+                    }
                 }
-            }
 
-            if(!impl::isFormatType(Fmt::at(i++))) {
-                return false;
-            }
+                if(!impl::isFormatType(Fmt::at(i++))) {
+                    return false;
+                }
 
-            const auto num_and_offset = impl::consume_number(Fmt::value(), i);
-            i = num_and_offset.second;
-            --i; // to combat the i++ in the loop
-            if(num_and_offset.first == 0) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /// return the format mode of the entire buffer (byte order).
-    template <typename Fmt>
-    constexpr impl::Endian get_byte_order(Fmt) {
-        // last character is the byte order, big endian if missing
-        constexpr auto last_char = Fmt::at(Fmt::size()-1);
-        return last_char == '<' ? impl::Endian::little : impl::Endian::big;
-    }
-
-    /// count the number of items in the format
-    /// @param array_as_one [IN] if true, count byte/char aray as one item (default)
-    template <typename Fmt>
-    constexpr size_t count_items(Fmt f, const bool array_as_one = true) {
-        static_assert(bitpacker::validate_format(Fmt{}), "Invalid Format!");
-        size_t itemCount = 0;
-        bool   is_bytes = false;
-
-        for(size_t i = 0; i < Fmt::size(); i++) {
-            auto currentChar = Fmt::at(i);
-            if(impl::isFormatMode(currentChar)) {
-                continue;
-            }
-
-            if(impl::isFormatType(currentChar)) {
-                is_bytes = (currentChar == 't' || currentChar == 'r');
-                currentChar = Fmt::at(++i);
-            }
-
-            if (impl::isDigit(currentChar)) {
                 const auto num_and_offset = impl::consume_number(Fmt::value(), i);
-
-                itemCount += is_bytes && !array_as_one ? num_and_offset.first : 1;
                 i = num_and_offset.second;
                 --i; // to combat the i++ in the loop
+                if(num_and_offset.first == 0) {
+                    return false;
+                }
             }
-            is_bytes = false;
+            return true;
         }
-        return itemCount;
-    }
 
-    template <typename Fmt>
-    constexpr std::array<RawFormatType, count_items(Fmt{})> get_type_array(Fmt f) {
-        std::array<RawFormatType, count_items(Fmt{})> arr{};
-        size_t currentType = 0;
-        impl::Endian currentEndian = impl::Endian::big;
-
-        for(size_t i = 0; i < Fmt::size(); i++) {
-            auto currentChar = Fmt::at(i);
-            if(impl::isFormatMode(currentChar)) {
-                currentEndian = currentChar == '>' ? impl::Endian::big : impl::Endian::little;
-                continue;
-            }
-
-            if(impl::isFormatType(currentChar)) {
-                const auto num_and_offset = impl::consume_number(Fmt::value(), ++i);
-                arr[currentType].formatChar = currentChar;
-                arr[currentType].endian     = currentEndian;
-                arr[currentType].count      = num_and_offset.first;
-                ++currentType;
-
-                i = num_and_offset.second;
-                i--; // to combat the i++ in the loop
-            }
+        /// return the format mode of the entire buffer (byte order).
+        template <typename Fmt>
+        constexpr impl::Endian get_byte_order(Fmt) noexcept {
+            // last character is the byte order, big endian if missing
+            constexpr auto last_char = Fmt::at(Fmt::size()-1);
+            return last_char == '<' ? impl::Endian::little : impl::Endian::big;
         }
-        return arr;
-    }
 
-    /// Count the bits used by the given format
-    template <typename Fmt>
-    constexpr size_t calcsize(Fmt f) {
-        constexpr auto type_array = get_type_array(Fmt{});
-        size_t bitCount = 0;
+        /// count the number of items in the format
+        /// @param array_as_one [IN] if true, count byte/char aray as one item (default)
+        template <typename Fmt>
+        constexpr size_t count_items(Fmt f, const bool array_as_one = true) noexcept
+        {
+            static_assert(validate_format(Fmt{}), "Invalid Format!");
+            size_t itemCount = 0;
+            bool   is_bytes = false;
 
-        for(const auto& type : type_array) {
-            if(type.isString() || type.isBytes()) {
-                bitCount += type.count*8;
+            for(size_t i = 0; i < Fmt::size(); i++) {
+                auto currentChar = Fmt::at(i);
+                if(impl::isFormatMode(currentChar)) {
+                    continue;
+                }
+
+                if(impl::isFormatType(currentChar)) {
+                    is_bytes = (currentChar == 't' || currentChar == 'r');
+                    currentChar = Fmt::at(++i);
+                }
+
+                if (impl::isDigit(currentChar)) {
+                    const auto num_and_offset = impl::consume_number(Fmt::value(), i);
+
+                    itemCount += is_bytes && !array_as_one ? num_and_offset.first : 1;
+                    i = num_and_offset.second;
+                    --i; // to combat the i++ in the loop
+                }
+                is_bytes = false;
             }
-            else {
-                bitCount += type.count;
-            }
+            return itemCount;
         }
-        return bitCount;
-    }
 
-    template <size_t Item, typename Fmt>
-    constexpr RawFormatType get_item_type(Fmt f) {
-        static_assert(Item < count_items(Fmt{}), "Invalid format item index!");
-        constexpr auto type_array = get_type_array(Fmt{});
-        return type_array[Item];
-    }
+        template < typename Fmt >
+        constexpr std::array< RawFormatType, count_items(Fmt{}) > get_type_array(Fmt f) noexcept
+        {
+            std::array< RawFormatType, count_items(Fmt{}) > arr{};
+            impl::Endian currentEndian = impl::Endian::big;
+            size_t currentType = 0;
+            size_t offset = 0;
 
-    template <size_t Item, typename Fmt>
-    constexpr size_t get_bit_offset(Fmt f) {
-        constexpr auto type_array = get_type_array(Fmt{});
-        size_t offset = 0;
-        for(size_t i = 0; i < Item; ++i) {
-            if(type_array[i].isString() || type_array[i].isBytes()) {
-                offset += type_array[i].count*8;
+            for (size_t i = 0; i < Fmt::size(); i++) {
+                auto currentChar = Fmt::at(i);
+                if (impl::isFormatMode(currentChar)) {
+                    currentEndian = currentChar == '>' ? impl::Endian::big : impl::Endian::little;
+                    continue;
+                }
+
+                if (impl::isFormatType(currentChar)) {
+                    const auto num_and_offset = impl::consume_number(Fmt::value(), ++i);
+                    arr[currentType].formatChar = currentChar;
+                    arr[currentType].endian = currentEndian;
+                    arr[currentType].count = num_and_offset.first;
+                    arr[currentType].offset = offset;
+
+                    if (isByteType(currentChar)) {
+                        offset += num_and_offset.first * ByteSize;
+                    }
+                    else {
+                        offset += num_and_offset.first;
+                    }
+
+                    ++currentType;
+
+                    i = num_and_offset.second;
+                    i--;  // to combat the i++ in the loop
+                }
             }
-            else {
-                offset += type_array[i].count;
-            }
+            return arr;
         }
-        return offset;
-    }
+
+        template < size_t Item, typename Fmt >
+        constexpr RawFormatType get_item_type(Fmt f) noexcept
+        {
+            static_assert(Item < count_items(Fmt{}), "Invalid format item index!");
+            constexpr auto type_array = get_type_array(Fmt{});
+            return type_array[Item];
+        }
 
     /***************************************************************************************************
      * Compile time unpacking functionality
      ***************************************************************************************************/
-    namespace impl {
 
         template <typename Fmt, size_t... Items, typename Input>
         constexpr auto unpack(std::index_sequence<Items...>, Input&& packedInput);
 
-        template <typename UnpackedType>
-        constexpr auto unpackElement(span<const byte_type> buffer, size_t offset) -> typename UnpackedType::return_type {
-            auto val = unpack_from< typename UnpackedType::rep_type >( buffer, offset, UnpackedType::bits );
-            return UnpackedType::convert(val);
+        template < typename UnpackedType >
+        constexpr auto unpackElement(span< const byte_type > buffer, size_t offset) -> typename UnpackedType::return_type
+        {
+            static_assert(UnpackedType::format != 'f', "Unpacking Floats not supported yet...");
+            static_assert(UnpackedType::format != 't', "Unpacking strings not supported yet...");
+            static_assert(UnpackedType::format != 'r', "Unpacking raw bytes not supported yet...");
+            if constexpr (UnpackedType::format == 'u') {
+                return unpack_from< typename UnpackedType::rep_type >(buffer, offset, UnpackedType::bits);
+            }
+            if constexpr (UnpackedType::format == 's') {
+                const auto val = unpack_from< typename UnpackedType::rep_type >(buffer, offset, UnpackedType::bits);
+                return impl::sign_extend< decltype(val), UnpackedType::bits >(val);
+            }
+            if constexpr (UnpackedType::format == 'b') {
+                const auto val = unpack_from< typename UnpackedType::rep_type >(buffer, offset, UnpackedType::bits);
+                return static_cast< bool >(val);
+            }
+            if constexpr (UnpackedType::format == 'f') {
+                static_assert(UnpackedType::bits == 16 || UnpackedType::bits == 32 || UnpackedType::bits == 64,
+                              "Expected float size of 16, 32, or 64 bits");
+            }
+            if constexpr (UnpackedType::format == 't' || UnpackedType::format == 'r') {
+                // the bit count is used for the number of char/bytes in a 't' or 'r' format
+                //std::array< typename UnpackedType::rep_type, UnpackedType::bits >
+            }
+            if constexpr (UnpackedType::format == 'p' || UnpackedType::format == 'P') {
+                // the bit count is used for the number of char/bytes in a 't' or 'r' format
+                //std::array< typename UnpackedType::rep_type, UnpackedType::bits >
+            }
         }
 
     } // namespace impl
 
-
-    template <typename Fmt, typename Input>
-    constexpr auto unpack(Fmt, Input&& packedInput) {
-        return impl::unpack<Fmt>(std::make_index_sequence<count_items(Fmt{})>(), std::forward<Input>(packedInput));
+    /// Count the bits used by the given format
+    template < typename Fmt >
+    constexpr size_t calcsize(Fmt f)
+    {
+        constexpr auto type_array = impl::get_type_array(Fmt{});
+        const auto last = type_array.back();
+        if (impl::isByteType(last.formatChar)) {
+            return last.offset + (last.count * ByteSize);
+        }
+        else {
+            return last.offset + last.count;
+        }
     }
 
-    template <typename Fmt, size_t... Items, typename Input>
-    constexpr auto impl::unpack(std::index_sequence<Items...>, Input&& packedInput) {
-        constexpr auto byte_order = bitpacker::get_byte_order(Fmt{});
-        constexpr RawFormatType formats[]  = { bitpacker::get_item_type<Items>(Fmt{})... };
-        constexpr size_t offsets[] = { bitpacker::get_bit_offset<Items>(Fmt{})... };
+    template < typename Fmt, typename Input >
+    constexpr auto unpack(Fmt, Input &&packedInput)
+    {
+        return impl::unpack< Fmt >(std::make_index_sequence< count_items(Fmt{}) >(),
+                                   std::forward< Input >(packedInput));
+    }
 
-        using Types = std::tuple<typename bitpacker::FormatType< formats[Items].formatChar, formats[Items].count, formats[Items].endian> ...>;
+    template < typename Fmt, size_t... Items, typename Input >
+    constexpr auto impl::unpack(std::index_sequence< Items... >, Input &&packedInput)
+    {
+        constexpr auto byte_order = impl::get_byte_order(Fmt{});
+        constexpr auto formats = impl::get_type_array(Fmt{});
 
-        const auto unpacked = std::make_tuple( impl::unpackElement< typename std::tuple_element_t<Items, Types> >(
-                packedInput,
-                offsets[Items])... );
+        using Types = std::tuple<
+            typename impl::FormatType< formats[Items].formatChar, formats[Items].count, formats[Items].endian >... >;
+
+        const auto unpacked = std::make_tuple(
+            impl::unpackElement< typename std::tuple_element_t< Items, Types > >(packedInput, formats[Items].offset)...);
         return unpacked;
     }
 
