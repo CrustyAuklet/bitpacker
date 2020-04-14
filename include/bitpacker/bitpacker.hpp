@@ -42,7 +42,26 @@
 #endif
 
 #if bitpacker_HAVE_STD_SPAN
-#include <span>
+#    include <span>
+#else
+#    if defined __has_include
+#        if __has_include(<gsl/gsl-lite.hpp>)
+#            include <gsl/gsl-lite.hpp>
+namespace bitpacker {
+using gsl::span;
+}
+#        elif __has_include(<nonstd/span.hpp>)
+#            include <nonstd/span.hpp>
+namespace bitpacker {
+using nonstd::span;
+}
+#        elif __has_include(<gsl/gsl>)
+#            include <gsl/gsl>
+namespace bitpacker {
+using gsl::span;
+}
+#        endif
+#    endif
 #endif
 
 namespace bitpacker {
