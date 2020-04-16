@@ -4,12 +4,13 @@ os: linux
 
 matrix:
   include:
-    - os: linux
-      env: CC=gcc-9 CXX=g++-9
-      addons:
-        apt:
-          sources: [ 'ubuntu-toolchain-r-test' ]
-          packages: [ 'gcc-9', 'g++-9' ]
+# broken in Travis as of 16APR2020
+#    - os: linux
+#      env: CC=gcc-9 CXX=g++-9
+#      addons:
+#        apt:
+#          sources: [ 'ubuntu-toolchain-r-test' ]
+#          packages: [ 'gcc-9', 'g++-9' ]
     - os: linux
       env: CC=gcc-7 CXX=g++-7
       addons:

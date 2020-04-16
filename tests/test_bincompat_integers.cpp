@@ -170,3 +170,19 @@ TEST_CASE("compare to python: multiple signed mixed endian integers", "[bitpacke
     testPackAgainstPython(BP_STRING("<s4s2>s10<s12s30>s43s64<s4s10s12"),
                           5, -1, 500, -2'000, 536'870'000, -4'358'146'411'000ll, 8'213'362'026'654'675'200ll, -5, 500, -2'000);
 }
+
+TEST_CASE("compare to python: bool", "[bitpacker::binary_compat]")
+{
+    testPackAgainstPython(BP_STRING("b1"), true);
+    testPackAgainstPython(BP_STRING("b1"), false);
+    testPackAgainstPython(BP_STRING("b1"), 1);
+    testPackAgainstPython(BP_STRING("b1"), 0);
+    
+    // these tests don't really work since the input numbers are interpreted as integers and tuple<bool> doesn't compare well to tuple<int>
+    //testPackAgainstPython(BP_STRING("b4"), 0b1010U);
+    //testPackAgainstPython(BP_STRING("b10"), 0b11'1010'0101U);
+    //testPackAgainstPython(BP_STRING("b12"), 0b1001'1010'0101U);
+    //testPackAgainstPython(BP_STRING("b30"), 0b10'1001'1010'0110'0101'0011'1100'0110U);
+    //testPackAgainstPython(BP_STRING("b43"), 0b110'1001'1010'0110'0101'0011'1100'0110'1001'1010'0101U);
+    //testPackAgainstPython(BP_STRING("b64"), 0xDEADBEEFCAFEBABE);
+}
