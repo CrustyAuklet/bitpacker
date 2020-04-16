@@ -182,10 +182,13 @@ std::string print_data_tuple(const std::tuple< T... > &_tup)
 template < typename Fmt, typename... Args >
 void testPackAgainstPython(Fmt, const Args &... toPack)
 {
+    constexpr auto formats = bitpacker::impl::get_type_array(Fmt{});
+
     //auto packed = bitpacker::pack(Fmt{}, toPack...);
     auto pythonPacked = runPythonPack(Fmt{}, toPack...);
 
     //CAPTURE(packed);
+    INFO("Format String: " << Fmt::value())
     INFO("From Python-pack: " << print_data_vector(pythonPacked));
 
     //REQUIRE(packed.size() == pythonPacked.size());
