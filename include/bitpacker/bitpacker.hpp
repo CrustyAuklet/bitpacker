@@ -428,13 +428,7 @@ namespace bitpacker {
                     arr[currentType].endian = currentEndian;
                     arr[currentType].count = num_and_offset.first;
                     arr[currentType].offset = offset;
-
-                    if (isByteType(currentChar)) {
-                        offset += num_and_offset.first * ByteSize;
-                    }
-                    else {
-                        offset += num_and_offset.first;
-                    }
+                    offset += num_and_offset.first;
 
                     ++currentType;
 
@@ -493,8 +487,23 @@ namespace bitpacker {
                               "Expected float size of 16, 32, or 64 bits");
             }
             if constexpr (UnpackedType::format == 't' || UnpackedType::format == 'r') {
-                // the bit count is used for the number of char/bytes in a 't' or 'r' format
-                //std::array< typename UnpackedType::rep_type, UnpackedType::bits >
+                // to remain binary compatable with bitstruct: bitcount is actual bits.
+                // Any partial bytes end up in the last byte/char, left aligned.
+                constexpr unsigned charsize = 8U;
+                constexpr unsigned full_bytes = UnpackedType::bits / 8;
+                constexpr unsigned extra_bits = UnpackedType::bits % 8;
+                constexpr size_t return_size = full_bytes + (extra_bits > 0 ? 1 : 0);
+                std::array< typename UnpackedType::rep_type, return_size > ar{};
+                
+                for (size_t i = 0; i < full_bytes; ++i) {
+                    ar[i] = unpack_from< typename UnpackedType::rep_type >(buffer, offset + (i * charsize), charsize);
+                }
+
+                if (extra_bits > 0) {
+                    ar[full_bytes + 1] = unpack_from< typename UnpackedType::rep_type >(buffer, offset + (full_bytes * charsize), extra_bits);
+                    ar[full_bytes + 1] <<= charsize - extra_bits; 
+                }
+                return ar;
             }
             if constexpr (UnpackedType::format == 'p' || UnpackedType::format == 'P') {
                 // the bit count is used for the number of char/bytes in a 't' or 'r' format
@@ -510,12 +519,15 @@ namespace bitpacker {
     {
         constexpr auto type_array = impl::get_type_array(Fmt{});
         const auto last = type_array.back();
-        if (impl::isByteType(last.formatChar)) {
-            return last.offset + (last.count * ByteSize);
-        }
-        else {
-            return last.offset + last.count;
-        }
+        return last.offset + last.count;
+    }
+
+    /// Count the number of bytes needed to hold the given format
+    template < typename Fmt >
+    constexpr size_t calcbytes(Fmt f)
+    {
+        constexpr auto bits = calcsize(Fmt{});
+        return (bits / ByteSize) + (bits % ByteSize ? 1 : 0);
     }
 
     template < typename Fmt, typename Input >

@@ -87,20 +87,36 @@ TEST_CASE("parse bit offset correctly", "[format]") {
     REQUIRE_STATIC(bpimpl::get_item_type<2>(BP_STRING("u4f16b2s12t10r10f32p2P2")  ).offset == 4+16 );
     REQUIRE_STATIC(bpimpl::get_item_type<3>(BP_STRING("u4f16b2s12t10r10f32p2P2>") ).offset == 4+16+2 );
     REQUIRE_STATIC(bpimpl::get_item_type<4>(BP_STRING("<u4f16b2s12t10r10f32p2P2") ).offset == 4+16+2+12 );
-    REQUIRE_STATIC(bpimpl::get_item_type<5>(BP_STRING("u4f16b2s12t10r10<f32p2P2") ).offset == 4+16+2+12+(8*10) );
-    REQUIRE_STATIC(bpimpl::get_item_type<6>(BP_STRING("u4f16b2s12t10r10f32p2P2")  ).offset == 4+16+2+12+(8*10)+(8*10) );
-    REQUIRE_STATIC(bpimpl::get_item_type<7>(BP_STRING("u4f16<b2s12t10r10f32p2P2") ).offset == 4+16+2+12+(8*10)+(8*10)+32 );
-    REQUIRE_STATIC(bpimpl::get_item_type<8>(BP_STRING("u4<f16b2>s12t10r10f32p2P2")).offset == 4+16+2+12+(8*10)+(8*10)+32+2 );
+    REQUIRE_STATIC(bpimpl::get_item_type<5>(BP_STRING("u4f16b2s12t10r10<f32p2P2") ).offset == 4+16+2+12+10 );
+    REQUIRE_STATIC(bpimpl::get_item_type<6>(BP_STRING("u4f16b2s12t10r10f32p2P2")  ).offset == 4+16+2+12+10+10 );
+    REQUIRE_STATIC(bpimpl::get_item_type<7>(BP_STRING("u4f16<b2s12t10r10f32p2P2") ).offset == 4+16+2+12+10+10+32 );
+    REQUIRE_STATIC(bpimpl::get_item_type<8>(BP_STRING("u4<f16b2>s12t10r10f32p2P2")).offset == 4+16+2+12+10+10+32+2 );
 }
 
-TEST_CASE("calculate format size", "[format]") {
-    REQUIRE_STATIC(bitpacker::calcsize(BP_STRING("u4f16b2s12t10r10f32p2P2")  ) == 230 );
-    REQUIRE_STATIC(bitpacker::calcsize(BP_STRING("u4f16b2<s12t10r10f32p2P2<")) == 230 );
-    REQUIRE_STATIC(bitpacker::calcsize(BP_STRING("u4f16b2s12t10r10f32p2P2")  ) == 230 );
-    REQUIRE_STATIC(bitpacker::calcsize(BP_STRING("u4f16b2s12t10r10f32p2P2>") ) == 230 );
-    REQUIRE_STATIC(bitpacker::calcsize(BP_STRING("<u4f16b2s12t10r10f32p2P2") ) == 230 );
-    REQUIRE_STATIC(bitpacker::calcsize(BP_STRING("u4f16b2s12t10r10<f32p2P2") ) == 230 );
-    REQUIRE_STATIC(bitpacker::calcsize(BP_STRING("u4f16b2s12t10r10f32p2P2")  ) == 230 );
-    REQUIRE_STATIC(bitpacker::calcsize(BP_STRING("u4f16<b2s12t10r10f32p2P2") ) == 230 );
-    REQUIRE_STATIC(bitpacker::calcsize(BP_STRING("u4<f16b2>s12t10r10f32p2P2")) == 230 );
+TEST_CASE("calculate format size in bits with bit-endian changing", "[format]") {
+    constexpr unsigned format_size = 4 + 16 + 2 + 12 + 10 + 10 + 32 + 2 + 2;
+    REQUIRE_STATIC(bitpacker::calcsize(BP_STRING("u4f16b2s12t10r10f32p2P2")  ) == format_size );
+    REQUIRE_STATIC(bitpacker::calcsize(BP_STRING("u4f16b2<s12t10r10f32p2P2<")) == format_size );
+    REQUIRE_STATIC(bitpacker::calcsize(BP_STRING("u4f16b2s12t10r10f32p2P2")  ) == format_size );
+    REQUIRE_STATIC(bitpacker::calcsize(BP_STRING("u4f16b2s12t10r10f32p2P2>") ) == format_size );
+    REQUIRE_STATIC(bitpacker::calcsize(BP_STRING("<u4f16b2s12t10r10f32p2P2") ) == format_size );
+    REQUIRE_STATIC(bitpacker::calcsize(BP_STRING("u4f16b2s12t10r10<f32p2P2") ) == format_size );
+    REQUIRE_STATIC(bitpacker::calcsize(BP_STRING("u4f16b2s12t10r10f32p2P2")  ) == format_size );
+    REQUIRE_STATIC(bitpacker::calcsize(BP_STRING("u4f16<b2s12t10r10f32p2P2") ) == format_size );
+    REQUIRE_STATIC(bitpacker::calcsize(BP_STRING("u4<f16b2>s12t10r10f32p2P2")) == format_size );
+}
+
+TEST_CASE("calculate format size in bytes with bit-endian changing", "[format]")
+{
+    constexpr unsigned format_size = 4 + 16 + 2 + 12 + 10 + 10 + 32 + 2 + 2;
+    constexpr unsigned byte_size = (format_size / 8) + (format_size % 8 ? 1 : 0);
+    REQUIRE_STATIC(bitpacker::calcbytes(BP_STRING("u4f16b2s12t10r10f32p2P2"))   == byte_size);
+    REQUIRE_STATIC(bitpacker::calcbytes(BP_STRING("u4f16b2<s12t10r10f32p2P2<")) == byte_size);
+    REQUIRE_STATIC(bitpacker::calcbytes(BP_STRING("u4f16b2s12t10r10f32p2P2"))   == byte_size);
+    REQUIRE_STATIC(bitpacker::calcbytes(BP_STRING("u4f16b2s12t10r10f32p2P2>"))  == byte_size);
+    REQUIRE_STATIC(bitpacker::calcbytes(BP_STRING("<u4f16b2s12t10r10f32p2P2"))  == byte_size);
+    REQUIRE_STATIC(bitpacker::calcbytes(BP_STRING("u4f16b2s12t10r10<f32p2P2"))  == byte_size);
+    REQUIRE_STATIC(bitpacker::calcbytes(BP_STRING("u4f16b2s12t10r10f32p2P2"))   == byte_size);
+    REQUIRE_STATIC(bitpacker::calcbytes(BP_STRING("u4f16<b2s12t10r10f32p2P2"))  == byte_size);
+    REQUIRE_STATIC(bitpacker::calcbytes(BP_STRING("u4<f16b2>s12t10r10f32p2P2")) == byte_size);
 }
