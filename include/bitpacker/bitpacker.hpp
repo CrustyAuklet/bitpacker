@@ -150,12 +150,16 @@ namespace bitpacker {
                         std::conditional_t<NumBits <= 32, int32_t,
                                 std::conditional_t<NumBits <= 64, int64_t,
                                         void >>>>;
-
+#pragma warning(push)
+#pragma warning(disable : 4293)
         template<typename T, size_t BitSize>
-        constexpr signed_type<BitSize> sign_extend(T val) noexcept {
+        constexpr signed_type<BitSize> sign_extend(T val) noexcept
+        {
             using return_type = signed_type<BitSize>;
             static_assert( std::is_unsigned<T>::value && std::is_integral<T>::value, "ValueType needs to be an unsigned integral type");
-            if (BitSize % ByteSize != 0) {
+            // warning disabled for shifts bigger than type, since this if statement avoids that case.
+            // if constexpr would work too, but trying to keep this section c++14 compatable
+            if (BitSize < (sizeof(T)*ByteSize)) {
                 const T upper_mask = static_cast<T>(~((static_cast<return_type>(1U) << BitSize) - 1));
                 const T msb = static_cast<return_type>(1U) << (BitSize - 1);
                 if (val & msb) { 
@@ -163,6 +167,23 @@ namespace bitpacker {
                 }
             }
             return static_cast<return_type>(val);
+        }
+#pragma warning(pop)
+
+        template < typename T, size_t BitSize >
+        constexpr T reverse_bits(std::remove_cv_t< T > val) noexcept
+        {
+            size_t count = BitSize-1;
+            std::remove_cv_t< T > retval = val & 0x01U;
+
+            val >>= 1U;
+            while (val && count) {
+                retval <<= 1U;
+                retval |= val & 0x01U;
+                val >>= 1U;
+                --count;
+            }
+            return retval << count; 
         }
 
     }  // implementation namespace
@@ -442,14 +463,25 @@ namespace bitpacker {
         template < typename UnpackedType >
         constexpr auto unpackElement(span< const byte_type > buffer, size_t offset) -> typename UnpackedType::return_type
         {
+            // TODO: Implement these formats
             static_assert(UnpackedType::format != 'f', "Unpacking Floats not supported yet...");
             static_assert(UnpackedType::format != 't', "Unpacking strings not supported yet...");
             static_assert(UnpackedType::format != 'r', "Unpacking raw bytes not supported yet...");
+            static_assert(UnpackedType::format != 'p' && UnpackedType::format != 'P', "Unpacking padding not supported yet...");
+
             if constexpr (UnpackedType::format == 'u') {
-                return unpack_from< typename UnpackedType::rep_type >(buffer, offset, UnpackedType::bits);
+                const auto v = unpack_from< typename UnpackedType::rep_type >(buffer, offset, UnpackedType::bits);
+                if (UnpackedType::bit_endian == impl::Endian::little) {
+                    return impl::reverse_bits< decltype(v), UnpackedType::bits >(v);
+                }
+                return v;
             }
             if constexpr (UnpackedType::format == 's') {
                 const auto val = unpack_from< typename UnpackedType::rep_type >(buffer, offset, UnpackedType::bits);
+                if (UnpackedType::bit_endian == impl::Endian::little) {
+                    const auto rval = impl::reverse_bits< decltype(val), UnpackedType::bits >(val);
+                    return impl::sign_extend< decltype(val), UnpackedType::bits >(rval);
+                }
                 return impl::sign_extend< decltype(val), UnpackedType::bits >(val);
             }
             if constexpr (UnpackedType::format == 'b') {
@@ -497,6 +529,7 @@ namespace bitpacker {
     constexpr auto impl::unpack(std::index_sequence< Items... >, Input &&packedInput)
     {
         constexpr auto byte_order = impl::get_byte_order(Fmt{});
+        static_assert(byte_order == impl::Endian::big, "Unpacking little endian byte order not supported yet...");
         constexpr auto formats = impl::get_type_array(Fmt{});
 
         using Types = std::tuple<

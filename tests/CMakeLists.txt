@@ -34,7 +34,7 @@ target_link_libraries(bitpacker_test_core PRIVATE catch_main bitpacker::bitpacke
 target_sources(bitpacker_test_core PRIVATE
     test_pack_impl.cpp
     test_unpack_impl.cpp
-#    test_specializations.cpp
+    test_helpers.cpp
 )
 
 add_library(pybitstruct STATIC bitstream.h bitstream.c)
@@ -49,7 +49,8 @@ if(BITPACKER_USE_CXX17)
     add_executable(bitpacker_test_against_python)
     target_link_libraries(bitpacker_test_against_python PRIVATE catch_main bitpacker::bitpacker)
     target_sources(bitpacker_test_against_python PRIVATE
-            test_compare_to_python.cpp
+            python_common.hpp
+            test_bincompat_integers.cpp
         )
 
     add_executable(bitpacker_test_tmp_helpers)
