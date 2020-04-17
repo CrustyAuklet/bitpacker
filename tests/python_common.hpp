@@ -49,25 +49,43 @@ std::string escapeString(const T &val)
     return out;
 }
 
+template <typename T>
+struct LocalStringMaker {
+    static std::string convert(const T& val) {
+        return Catch::StringMaker< T >::convert(val);
+    }
+};
+
+template < int SZ >
+struct LocalStringMaker< unsigned char[SZ] > {
+    static std::string convert(unsigned char const *str) {
+        return "b" + std::string(Catch::StringMaker< unsigned char[SZ] >::convert(str));
+    }
+};
+
+template <>
+struct LocalStringMaker< char > {
+    static std::string convert(char c) {
+        return "chr(" + std::to_string(c) + ")";
+    }
+};
+
 // used to output values for python packing
 template < typename T >
 std::string convertToString(const T &val)
 {
-    if constexpr (std::is_same_v< T, char >) {
-        return "chr(" + std::to_string(val) + ")";
-    }
     if constexpr (std::is_integral_v< T >) {
         return std::to_string(val);
     }
     if constexpr (std::is_convertible_v< T, std::string >) {
-        return "b" + escapeString(val);
+        return escapeString(val);
     }
     if constexpr (std::is_floating_point_v< T >) {
         std::stringstream ss;
         ss << std::scientific << std::setprecision(16) << val;
         return ss.str();
     }
-    return Catch::StringMaker< T >::convert(val);
+    return LocalStringMaker< T >::convert(val);
 }
 
 template < typename T , size_t N>
@@ -154,12 +172,12 @@ auto runPythonPack(Fmt, const Args &... toPack)
 inline std::string print_data_vector(const std::vector< char > &vec)
 {
     std::stringstream ss;
-    ss << "{";
+    ss << "{ ";
     for (const auto &v : vec) {
-        ss << " 0x" << std::hex << (static_cast< unsigned >(v) & 0xFFU) << ",";
+        ss << "0x" << std::hex << (static_cast< unsigned >(v) & 0xFFU) << ", ";
     }
-    ss << " }";
-    return ss.str();
+    std::string retval = ss.str();
+    return retval.substr(0, retval.size() - 2) + " }";
 }
 
 template < typename T >
@@ -176,16 +194,17 @@ std::string print_tuple_value(const T v)
 }
 
 // specialization for printing 'r' format return value
-template < size_t N >
-std::string print_tuple_value(const std::array<bitpacker::byte_type, N> buff)
+template < typename T, size_t N >
+std::string print_tuple_value(const std::array<T, N> buff)
 {
+    static_assert(std::is_same_v< T, bitpacker::byte_type > || std::is_same_v< T, char > || std::is_same_v< T, uint8_t >);
     std::stringstream ss;
     ss << "{ ";
     for ( const auto& v : buff ) {
-        ss << std::hex << static_cast< int >(v);
+        ss << "0x" << std::hex << static_cast< int >(v) << ", ";
     }
-    ss << " }";
-    return ss.str();
+    std::string retval = ss.str();
+    return retval.substr(0, retval.size()-2) + " }";
 }
 
 template < class TupType, size_t... I >
@@ -193,8 +212,7 @@ std::string print_data_tuple(const TupType &_tup, std::index_sequence< I... >)
 {
     std::stringstream ss;
     ss << "{ ";
-    (..., (ss << (I == 0 ? "" : ", ") << std::hex
-              << print_tuple_value(std::get< I >(_tup))));
+    (..., (ss << (I == 0 ? "" : ", ") << std::hex << print_tuple_value(std::get< I >(_tup))));
     ss << " }";
     return ss.str();
 }
@@ -203,6 +221,44 @@ template < class... T >
 std::string print_data_tuple(const std::tuple< T... > &_tup)
 {
     return print_data_tuple(_tup, std::make_index_sequence< sizeof...(T) >());
+}
+
+template <typename T, size_t N>
+bool operator==(const std::array< T, N > &lhs, const T* rhs)
+{
+    static_assert(std::is_same_v< T, bitpacker::byte_type > || std::is_same_v< T, char > || std::is_same_v< T, uint8_t >);
+    // assuming lhs ans rhs are the same length. if not... that is bad.
+    // don't want to assume rhs is null terminated
+    bool are_same = true;
+    for (size_t i = 0; i < N; ++i) {
+        are_same &= lhs[i] == static_cast< bitpacker::byte_type >(rhs[i]);
+    }
+    return are_same;
+}
+
+template <typename T1, typename T2>
+bool bitpacker_test_compare(const T1 &lhs, const T2 &rhs)
+{
+    if constexpr ( std::is_same_v<T1, bool> && std::is_convertible_v< T2, bool >) {
+        return lhs == static_cast< bool >(rhs);
+    }
+    return lhs == rhs;
+}
+
+template < std::size_t... Items, typename T1, typename T2 >
+bool compareBitpackerTuples_impl(std::index_sequence< Items... >, const T1 &lhs, const T2 &rhs)
+{
+    return ( bitpacker_test_compare(std::get< Items >(lhs), std::get< Items >(rhs)) && ...);
+}
+
+template < typename T1, typename T2 >
+bool compareBitpackerTuples(const T1& lhs, const T2& rhs)
+{
+    constexpr auto leftSize = std::tuple_size_v< T1 >;
+    constexpr auto rightSize = std::tuple_size_v< T2 >;
+    const bool same_size = leftSize == rightSize;
+
+    return same_size && compareBitpackerTuples_impl( std::make_index_sequence< leftSize >(), lhs, rhs );
 }
 
 template < typename Fmt, typename... Args >
@@ -230,5 +286,6 @@ void testPackAgainstPython(Fmt, const Args &... toPack)
 
     // explicitly creating tuple of ReturnTypes will make tests pass if the value is implicitly convertable to the expected return type
     // for example: multi-bit bool values
-    REQUIRE(unpacked == ReturnTypes{toPack...});
+    const bool success = compareBitpackerTuples(unpacked, std::make_tuple(toPack...));
+    REQUIRE(success);
 }
