@@ -49,6 +49,7 @@ std::string escapeString(const T &val)
     return out;
 }
 
+// used to output values for python packing
 template < typename T >
 std::string convertToString(const T &val)
 {
@@ -67,6 +68,18 @@ std::string convertToString(const T &val)
         return ss.str();
     }
     return Catch::StringMaker< T >::convert(val);
+}
+
+template < typename T , size_t N>
+std::string convertToString(std::array< T, N > buff)
+{
+    std::stringstream ss;
+    ss << "b'";
+    for (const auto &v : buff) {
+        ss << "\\x" << std::hex << static_cast< int >(v);
+    }
+    ss << "'";
+    return ss.str();
 }
 
 
@@ -159,6 +172,19 @@ std::string print_tuple_value(const T v)
     else {
         ss << v;
     }
+    return ss.str();
+}
+
+// specialization for printing 'r' format return value
+template < size_t N >
+std::string print_tuple_value(const std::array<bitpacker::byte_type, N> buff)
+{
+    std::stringstream ss;
+    ss << "{ ";
+    for ( const auto& v : buff ) {
+        ss << std::hex << static_cast< int >(v);
+    }
+    ss << " }";
     return ss.str();
 }
 

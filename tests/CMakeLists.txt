@@ -51,6 +51,7 @@ if(BITPACKER_USE_CXX17)
     target_sources(bitpacker_test_against_python PRIVATE
             python_common.hpp
             test_bincompat_integers.cpp
+            test_bincompat_arrays.cpp
         )
 
     add_executable(bitpacker_test_tmp_helpers)
