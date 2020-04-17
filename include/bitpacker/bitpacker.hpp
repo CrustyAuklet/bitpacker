@@ -496,16 +496,16 @@ namespace bitpacker {
                 constexpr unsigned charsize = 8U;
                 constexpr unsigned full_bytes = UnpackedType::bits / 8;
                 constexpr unsigned extra_bits = UnpackedType::bits % 8;
-                constexpr size_t return_size = full_bytes + (extra_bits > 0 ? 1 : 0);
-                format_type< UnpackedType::format, UnpackedType::bits > buff{};
+                constexpr size_t return_size = bit2byte(UnpackedType::bits);
+                typename UnpackedType::return_type buff{};
                 
                 for (size_t i = 0; i < full_bytes; ++i) {
-                    buff[i] = unpack_from< typename UnpackedType::rep_type >(buffer, offset + (i * charsize), charsize);
+                    buff[i] = unpack_from< uint8_t >(buffer, offset + (i * charsize), charsize);
                 }
 
                 if (extra_bits > 0) {
-                    buff[full_bytes + 1] = unpack_from< typename UnpackedType::rep_type >(buffer, offset + (full_bytes * charsize), extra_bits);
-                    buff[full_bytes + 1] <<= charsize - extra_bits; 
+                    buff[return_size - 1] = unpack_from< uint8_t >(buffer, offset + (full_bytes * charsize), extra_bits);
+                    buff[return_size - 1] <<= charsize - extra_bits; 
                 }
 
                 // little endian bitwise in bitstruct means the entire length flipped.
