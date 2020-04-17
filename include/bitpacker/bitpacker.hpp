@@ -525,6 +525,34 @@ namespace bitpacker {
             }
         }
 
+        template < typename Fmt, std::size_t... Items >
+        constexpr auto FormatTypes_impl(Fmt f, std::index_sequence< Items... >)
+        {
+            constexpr auto formats = impl::get_type_array(Fmt{});
+            using Types = std::tuple< typename impl::FormatType< formats[Items].formatChar, formats[Items].count, formats[Items].endian >... >;
+            return Types{};
+        }
+
+        template < typename Fmt, typename Indices = std::make_index_sequence< count_items(Fmt{}) > >
+        constexpr auto FormatTypes(Fmt f)
+        {
+            return FormatTypes_impl(f, Indices{});
+        }
+
+        template < typename Fmt, std::size_t... Items >
+        constexpr auto ReturnTypes_impl(Fmt f, std::index_sequence< Items... >)
+        {
+            constexpr auto formats = impl::get_type_array(Fmt{});
+            using Types = std::tuple< typename impl::FormatType< formats[Items].formatChar, formats[Items].count, formats[Items].endian >::return_type... >;
+            return Types{};
+        }
+
+        template < typename Fmt, typename Indices = std::make_index_sequence< count_items(Fmt{}) > >
+        constexpr auto ReturnTypes(Fmt f)
+        {
+            return ReturnTypes_impl(f, Indices{});
+        }
+
     } // namespace impl
 
     /// Count the bits used by the given format
@@ -558,11 +586,11 @@ namespace bitpacker {
         static_assert(byte_order == impl::Endian::big, "Unpacking little endian byte order not supported yet...");
         constexpr auto formats = impl::get_type_array(Fmt{});
 
-        using Types = std::tuple<
-            typename impl::FormatType< formats[Items].formatChar, formats[Items].count, formats[Items].endian >... >;
+        using FormatTypes = decltype(FormatTypes<>(Fmt{}));
+        using ReturnTypes = decltype(ReturnTypes<>(Fmt{}));
 
         const auto unpacked = std::make_tuple(
-            impl::unpackElement< typename std::tuple_element_t< Items, Types > >(packedInput, formats[Items].offset)...);
+            impl::unpackElement< typename std::tuple_element_t< Items, FormatTypes > >(packedInput, formats[Items].offset)...);
         return unpacked;
     }
 
