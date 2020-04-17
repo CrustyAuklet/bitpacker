@@ -171,10 +171,11 @@ namespace bitpacker {
 #pragma warning(pop)
 
         template < typename T, size_t BitSize >
-        constexpr T reverse_bits(std::remove_cv_t< T > val) noexcept
+        constexpr auto reverse_bits(std::remove_cv_t< T > val) noexcept
         {
+            using return_type = std::remove_reference_t< std::remove_cv_t< T >>;
             size_t count = BitSize-1;
-            std::remove_cv_t< T > retval = val & 0x01U;
+            return_type retval = val & 0x01U;
 
             val >>= 1U;
             while (val && count) {
@@ -317,14 +318,19 @@ namespace bitpacker {
             little
         };
 
+        constexpr size_t bit2byte(size_t bits) noexcept
+        {
+            return (bits / ByteSize) + (bits % ByteSize ? 1 : 0);
+        }
+
         template <char FormatChar, size_t BitCount>
-        using format_type = std::conditional_t<FormatChar == 'u', impl::unsigned_type<BitCount>,
-                std::conditional_t<FormatChar == 's', impl::signed_type<BitCount>,
-                        std::conditional_t<FormatChar == 'f', float,
-                                std::conditional_t<FormatChar == 'b', bool,
-                                        std::conditional_t<FormatChar == 't', std::array<char, BitCount>,
-                                                std::conditional_t<FormatChar == 'r', std::array<byte_type, BitCount>,
-                                                        void>>>>>>;
+        using format_type = std::conditional_t<FormatChar == 'u', impl::unsigned_type<BitCount>, 
+            std::conditional_t<FormatChar == 's', impl::signed_type<BitCount>, 
+                std::conditional_t<FormatChar == 'f', float, 
+                    std::conditional_t<FormatChar == 'b', bool, 
+                        std::conditional_t< FormatChar == 't', std::array< char, bit2byte(BitCount) >,
+                            std::conditional_t< FormatChar == 'r', std::array< byte_type, bit2byte(BitCount) >, 
+                                void>>>>>>;
 
         struct RawFormatType {
             char formatChar;
@@ -459,8 +465,6 @@ namespace bitpacker {
         {
             // TODO: Implement these formats
             static_assert(UnpackedType::format != 'f', "Unpacking Floats not supported yet...");
-            static_assert(UnpackedType::format != 't', "Unpacking strings not supported yet...");
-            static_assert(UnpackedType::format != 'r', "Unpacking raw bytes not supported yet...");
             static_assert(UnpackedType::format != 'p' && UnpackedType::format != 'P', "Unpacking padding not supported yet...");
 
             if constexpr (UnpackedType::format == 'u') {
@@ -493,17 +497,27 @@ namespace bitpacker {
                 constexpr unsigned full_bytes = UnpackedType::bits / 8;
                 constexpr unsigned extra_bits = UnpackedType::bits % 8;
                 constexpr size_t return_size = full_bytes + (extra_bits > 0 ? 1 : 0);
-                std::array< typename UnpackedType::rep_type, return_size > ar{};
+                format_type< UnpackedType::format, UnpackedType::bits > buff{};
                 
                 for (size_t i = 0; i < full_bytes; ++i) {
-                    ar[i] = unpack_from< typename UnpackedType::rep_type >(buffer, offset + (i * charsize), charsize);
+                    buff[i] = unpack_from< typename UnpackedType::rep_type >(buffer, offset + (i * charsize), charsize);
                 }
 
                 if (extra_bits > 0) {
-                    ar[full_bytes + 1] = unpack_from< typename UnpackedType::rep_type >(buffer, offset + (full_bytes * charsize), extra_bits);
-                    ar[full_bytes + 1] <<= charsize - extra_bits; 
+                    buff[full_bytes + 1] = unpack_from< typename UnpackedType::rep_type >(buffer, offset + (full_bytes * charsize), extra_bits);
+                    buff[full_bytes + 1] <<= charsize - extra_bits; 
                 }
-                return ar;
+
+                // little endian bitwise in bitstruct means the entire length flipped.
+                // to simulate this we reverse the order then flip each bytes bit order
+                if (UnpackedType::bit_endian == impl::Endian::little) {
+                    std::reverse(buff.begin(), buff.end());
+                    for (auto &v : buff) {
+                        v = impl::reverse_bits< decltype(v), ByteSize >(v);
+                    }
+                }
+
+                return buff;
             }
             if constexpr (UnpackedType::format == 'p' || UnpackedType::format == 'P') {
                 // the bit count is used for the number of char/bytes in a 't' or 'r' format
@@ -527,7 +541,7 @@ namespace bitpacker {
     constexpr size_t calcbytes(Fmt f)
     {
         constexpr auto bits = calcsize(Fmt{});
-        return (bits / ByteSize) + (bits % ByteSize ? 1 : 0);
+        return impl::bit2byte(bits);
     }
 
     template < typename Fmt, typename Input >
