@@ -60,7 +60,7 @@ std::string convertToString(const T &val)
         return std::to_string(val);
     }
     if constexpr (std::is_convertible_v< T, std::string >) {
-        return escapeString(val);
+        return "b" + escapeString(val);
     }
     if constexpr (std::is_floating_point_v< T >) {
         std::stringstream ss;
@@ -209,6 +209,8 @@ template < typename Fmt, typename... Args >
 void testPackAgainstPython(Fmt, const Args &... toPack)
 {
     constexpr auto formats = bitpacker::impl::get_type_array(Fmt{});
+    using FormatTypes = decltype(bitpacker::impl::FormatTypes<>(Fmt{}));
+    using ReturnTypes = decltype(bitpacker::impl::ReturnTypes<>(Fmt{}));
 
     //auto packed = bitpacker::pack(Fmt{}, toPack...);
     auto pythonPacked = runPythonPack(Fmt{}, toPack...);
@@ -224,6 +226,9 @@ void testPackAgainstPython(Fmt, const Args &... toPack)
     auto unpacked = bitpacker::unpack(Fmt{}, buffer);
 
     INFO("Unpacked by Bitpacker: " << print_data_tuple(unpacked));
-    INFO("Expected: " << print_data_tuple(std::make_tuple(toPack...)));
-    REQUIRE(unpacked == std::make_tuple(toPack...));
+    INFO("Expected (uncast): " << print_data_tuple(std::make_tuple(toPack...)));
+
+    // explicitly creating tuple of ReturnTypes will make tests pass if the value is implicitly convertable to the expected return type
+    // for example: multi-bit bool values
+    REQUIRE(unpacked == ReturnTypes{toPack...});
 }

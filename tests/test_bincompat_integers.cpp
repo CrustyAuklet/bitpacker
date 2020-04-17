@@ -178,11 +178,10 @@ TEST_CASE("compare to python: bool", "[bitpacker::binary_compat]")
     testPackAgainstPython(BP_STRING("b1"), 1);
     testPackAgainstPython(BP_STRING("b1"), 0);
     
-    // these tests don't really work since the input numbers are interpreted as integers and tuple<bool> doesn't compare well to tuple<int>
-    //testPackAgainstPython(BP_STRING("b4"), 0b1010U);
-    //testPackAgainstPython(BP_STRING("b10"), 0b11'1010'0101U);
-    //testPackAgainstPython(BP_STRING("b12"), 0b1001'1010'0101U);
-    //testPackAgainstPython(BP_STRING("b30"), 0b10'1001'1010'0110'0101'0011'1100'0110U);
-    //testPackAgainstPython(BP_STRING("b43"), 0b110'1001'1010'0110'0101'0011'1100'0110'1001'1010'0101U);
-    //testPackAgainstPython(BP_STRING("b64"), 0xDEADBEEFCAFEBABE);
+    testPackAgainstPython(BP_STRING("b4"), 0b1010U);
+    testPackAgainstPython(BP_STRING("b10"), 0b11'1010'0101U);
+    testPackAgainstPython(BP_STRING("b12"), 0b1001'1010'0101U);
+    testPackAgainstPython(BP_STRING("b30"), 0b10'1001'1010'0110'0101'0011'1100'0110U);
+    testPackAgainstPython(BP_STRING("b43"), 0b110'1001'1010'0110'0101'0011'1100'0110'1001'1010'0101U);
+    testPackAgainstPython(BP_STRING("b64"), 0xDEADBEEFCAFEBABE);
 }
