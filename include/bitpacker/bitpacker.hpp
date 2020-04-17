@@ -467,22 +467,19 @@ namespace bitpacker {
             static_assert(UnpackedType::format != 'f', "Unpacking Floats not supported yet...");
             static_assert(UnpackedType::format != 'p' && UnpackedType::format != 'P', "Unpacking padding not supported yet...");
 
-            if constexpr (UnpackedType::format == 'u') {
-                const auto v = unpack_from< typename UnpackedType::rep_type >(buffer, offset, UnpackedType::bits);
+            if constexpr (UnpackedType::format == 'u' || UnpackedType::format == 's') {
+                static_assert(UnpackedType::bits <= 64, "Integer types must be 64 bits or less");
+                auto val = unpack_from< typename UnpackedType::rep_type >(buffer, offset, UnpackedType::bits);
                 if (UnpackedType::bit_endian == impl::Endian::little) {
-                    return impl::reverse_bits< decltype(v), UnpackedType::bits >(v);
+                    val = impl::reverse_bits< decltype(val), UnpackedType::bits >(val);
                 }
-                return v;
-            }
-            if constexpr (UnpackedType::format == 's') {
-                const auto val = unpack_from< typename UnpackedType::rep_type >(buffer, offset, UnpackedType::bits);
-                if (UnpackedType::bit_endian == impl::Endian::little) {
-                    const auto rval = impl::reverse_bits< decltype(val), UnpackedType::bits >(val);
-                    return impl::sign_extend< decltype(val), UnpackedType::bits >(rval);
+                if constexpr (UnpackedType::format == 's') {
+                    return impl::sign_extend< decltype(val), UnpackedType::bits >(val);
                 }
-                return impl::sign_extend< decltype(val), UnpackedType::bits >(val);
+                return val;
             }
             if constexpr (UnpackedType::format == 'b') {
+                static_assert(UnpackedType::bits <= 64, "Boolean types must be 64 bits or less");
                 const auto val = unpack_from< typename UnpackedType::rep_type >(buffer, offset, UnpackedType::bits);
                 return static_cast< bool >(val);
             }
