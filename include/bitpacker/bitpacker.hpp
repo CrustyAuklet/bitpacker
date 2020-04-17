@@ -384,11 +384,10 @@ namespace bitpacker {
         /// count the number of items in the format
         /// @param array_as_one [IN] if true, count byte/char aray as one item (default)
         template <typename Fmt>
-        constexpr size_t count_items(Fmt f, const bool array_as_one = true) noexcept
+        constexpr size_t count_items(Fmt f) noexcept
         {
             static_assert(validate_format(Fmt{}), "Invalid Format!");
             size_t itemCount = 0;
-            bool   is_bytes = false;
 
             for(size_t i = 0; i < Fmt::size(); i++) {
                 auto currentChar = Fmt::at(i);
@@ -397,24 +396,22 @@ namespace bitpacker {
                 }
 
                 if(impl::isFormatType(currentChar)) {
-                    is_bytes = (currentChar == 't' || currentChar == 'r');
                     currentChar = Fmt::at(++i);
                 }
 
                 if (impl::isDigit(currentChar)) {
                     const auto num_and_offset = impl::consume_number(Fmt::value(), i);
 
-                    itemCount += is_bytes && !array_as_one ? num_and_offset.first : 1;
+                    ++itemCount;
                     i = num_and_offset.second;
                     --i; // to combat the i++ in the loop
                 }
-                is_bytes = false;
             }
             return itemCount;
         }
 
         template < typename Fmt >
-        constexpr std::array< RawFormatType, count_items(Fmt{}) > get_type_array(Fmt f) noexcept
+        constexpr auto get_type_array(Fmt f) noexcept -> std::array< RawFormatType, count_items(Fmt{}) >
         {
             std::array< RawFormatType, count_items(Fmt{}) > arr{};
             impl::Endian currentEndian = impl::Endian::big;
