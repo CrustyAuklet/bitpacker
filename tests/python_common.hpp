@@ -264,10 +264,6 @@ bool compareBitpackerTuples(const T1& lhs, const T2& rhs)
 template < typename Fmt, typename... Args >
 void testPackAgainstPython(Fmt, const Args &... toPack)
 {
-    constexpr auto formats = bitpacker::impl::get_type_array(Fmt{});
-    using FormatTypes = decltype(bitpacker::impl::FormatTypes<>(Fmt{}));
-    using ReturnTypes = decltype(bitpacker::impl::ReturnTypes<>(Fmt{}));
-
     //auto packed = bitpacker::pack(Fmt{}, toPack...);
     auto pythonPacked = runPythonPack(Fmt{}, toPack...);
 
