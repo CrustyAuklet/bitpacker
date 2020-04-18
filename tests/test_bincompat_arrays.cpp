@@ -40,3 +40,11 @@ TEST_CASE("compare to python: text arrays mixed with integers", "[bitpacker::bin
     testPackAgainstPython(BP_STRING("u5t21s8"), 25, "geH", -45);
     testPackAgainstPython(BP_STRING("u3t18s12"), 7, "ge@", -45); // @ == 0x40, upper 2 bits
 }
+
+TEST_CASE("compare to python: padding", "[bitpacker::binary_compat]")
+{
+    testPackAgainstPython(BP_STRING("u5p3u8"), 25, 255);
+    testPackAgainstPython(BP_STRING("u5p13u8"), 25, 255);
+    testPackAgainstPython(BP_STRING("u5P3u8"), 25, 255);
+    testPackAgainstPython(BP_STRING("u5P13u8"), 25, 255);
+}

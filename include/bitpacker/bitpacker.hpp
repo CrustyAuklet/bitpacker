@@ -384,10 +384,11 @@ namespace bitpacker {
         /// count the number of items in the format
         /// @param array_as_one [IN] if true, count byte/char aray as one item (default)
         template <typename Fmt>
-        constexpr size_t count_items(Fmt f) noexcept
+        constexpr size_t count_items(Fmt f, const bool ignore_padding = false) noexcept
         {
             static_assert(validate_format(Fmt{}), "Invalid Format!");
             size_t itemCount = 0;
+            bool is_padding = false;
 
             for(size_t i = 0; i < Fmt::size(); i++) {
                 auto currentChar = Fmt::at(i);
@@ -396,22 +397,24 @@ namespace bitpacker {
                 }
 
                 if(impl::isFormatType(currentChar)) {
+                    is_padding = isPadding(currentChar);
                     currentChar = Fmt::at(++i);
                 }
 
                 if (impl::isDigit(currentChar)) {
                     const auto num_and_offset = impl::consume_number(Fmt::value(), i);
-
-                    ++itemCount;
+ 
+                    itemCount += ignore_padding && is_padding ? 0 : 1;
                     i = num_and_offset.second;
                     --i; // to combat the i++ in the loop
                 }
+                is_padding = false;
             }
             return itemCount;
         }
 
-        template < typename Fmt >
-        constexpr auto get_type_array(Fmt f) noexcept -> std::array< RawFormatType, count_items(Fmt{}) >
+        template < typename Fmt>
+        constexpr auto get_type_array(Fmt f) noexcept
         {
             std::array< RawFormatType, count_items(Fmt{}) > arr{};
             impl::Endian currentEndian = impl::Endian::big;
@@ -442,17 +445,26 @@ namespace bitpacker {
             return arr;
         }
 
-        template < size_t Item, typename Fmt >
-        constexpr RawFormatType get_item_type(Fmt f) noexcept
-        {
-            static_assert(Item < count_items(Fmt{}), "Invalid format item index!");
-            constexpr auto type_array = get_type_array(Fmt{});
-            return type_array[Item];
-        }
-
     /***************************************************************************************************
      * Compile time unpacking functionality
      ***************************************************************************************************/
+
+#if bitpacker_CPP20_OR_GREATER
+        // constexpr in c++20 and greater
+        using std::reverse;
+#else
+        // copied from cppref but constexpr, we KNOW its trivial types
+        template < class BidirIt >
+        constexpr void reverse(BidirIt first, BidirIt last)
+        {
+            while ((first != last) && (first != --last)) {
+                const auto tmp = *first;
+                *first = *last;
+                *last = tmp;
+                ++first;
+            }
+        }
+#endif
 
         template <typename Fmt, size_t... Items, typename Input>
         constexpr auto unpack(std::index_sequence<Items...>, Input&& packedInput);
@@ -462,7 +474,7 @@ namespace bitpacker {
         {
             // TODO: Implement these formats
             static_assert(UnpackedType::format != 'f', "Unpacking Floats not supported yet...");
-            static_assert(UnpackedType::format != 'p' && UnpackedType::format != 'P', "Unpacking padding not supported yet...");
+            static_assert(!isPadding(UnpackedType::format), "Something is wrong :( Padding types shouldn't get here!");
 
             if constexpr (UnpackedType::format == 'u' || UnpackedType::format == 's') {
                 static_assert(UnpackedType::bits <= 64, "Integer types must be 64 bits or less");
@@ -505,7 +517,7 @@ namespace bitpacker {
                 // little endian bitwise in bitstruct means the entire length flipped.
                 // to simulate this we reverse the order then flip each bytes bit order
                 if (UnpackedType::bit_endian == impl::Endian::little) {
-                    std::reverse(buff.begin(), buff.end());
+                    reverse(buff.begin(), buff.end());
                     for (auto &v : buff) {
                         v = impl::reverse_bits< decltype(v), ByteSize >(v);
                     }
@@ -513,38 +525,19 @@ namespace bitpacker {
 
                 return buff;
             }
-            if constexpr (UnpackedType::format == 'p' || UnpackedType::format == 'P') {
-                // the bit count is used for the number of char/bytes in a 't' or 'r' format
-                //std::array< typename UnpackedType::rep_type, UnpackedType::bits >
+        }
+
+        template <size_t N>
+        constexpr auto remove_padding(const std::array< RawFormatType, N > &types) noexcept
+        {
+            std::array< RawFormatType, N > buff{};
+            size_t insert_idx = 0;
+            for (const auto& t : types) {
+                if (!isPadding(t.formatChar)) {
+                    buff[insert_idx++] = t;
+                }
             }
-        }
-
-        template < typename Fmt, std::size_t... Items >
-        constexpr auto FormatTypes_impl(Fmt f, std::index_sequence< Items... >)
-        {
-            constexpr auto formats = impl::get_type_array(Fmt{});
-            using Types = std::tuple< typename impl::FormatType< formats[Items].formatChar, formats[Items].count, formats[Items].endian >... >;
-            return Types{};
-        }
-
-        template < typename Fmt, typename Indices = std::make_index_sequence< count_items(Fmt{}) > >
-        constexpr auto FormatTypes(Fmt f)
-        {
-            return FormatTypes_impl(f, Indices{});
-        }
-
-        template < typename Fmt, std::size_t... Items >
-        constexpr auto ReturnTypes_impl(Fmt f, std::index_sequence< Items... >)
-        {
-            constexpr auto formats = impl::get_type_array(Fmt{});
-            using Types = std::tuple< typename impl::FormatType< formats[Items].formatChar, formats[Items].count, formats[Items].endian >::return_type... >;
-            return Types{};
-        }
-
-        template < typename Fmt, typename Indices = std::make_index_sequence< count_items(Fmt{}) > >
-        constexpr auto ReturnTypes(Fmt f)
-        {
-            return ReturnTypes_impl(f, Indices{});
+            return buff;
         }
 
     } // namespace impl
@@ -569,7 +562,7 @@ namespace bitpacker {
     template < typename Fmt, typename Input >
     constexpr auto unpack(Fmt, Input &&packedInput)
     {
-        return impl::unpack< Fmt >(std::make_index_sequence< count_items(Fmt{}) >(),
+        return impl::unpack< Fmt >(std::make_index_sequence< count_items(Fmt{}, true) >(),
                                    std::forward< Input >(packedInput));
     }
 
@@ -578,10 +571,9 @@ namespace bitpacker {
     {
         constexpr auto byte_order = impl::get_byte_order(Fmt{});
         static_assert(byte_order == impl::Endian::big, "Unpacking little endian byte order not supported yet...");
-        constexpr auto formats = impl::get_type_array(Fmt{});
+        constexpr auto formats = impl::remove_padding(impl::get_type_array(Fmt{}));
 
-        using FormatTypes = decltype(FormatTypes<>(Fmt{}));
-        using ReturnTypes = decltype(ReturnTypes<>(Fmt{}));
+        using FormatTypes = std::tuple< typename impl::FormatType< formats[Items].formatChar, formats[Items].count, formats[Items].endian >... >;
 
         const auto unpacked = std::make_tuple(
             impl::unpackElement< typename std::tuple_element_t< Items, FormatTypes > >(packedInput, formats[Items].offset)...);
