@@ -333,10 +333,10 @@ namespace bitpacker {
                                 void>>>>>>;
 
         struct RawFormatType {
-            char formatChar;
-            size_t count;
-            size_t offset;
-            impl::Endian endian;
+            char formatChar;    //< the format character of this items type
+            size_t count;       //< number of bits in this item
+            size_t offset;      //< offset from start of format in bits
+            impl::Endian endian;//< bit endianness of this value
         };
 
         // Specifying the Big Endian format
@@ -381,14 +381,19 @@ namespace bitpacker {
             return last_char == '<' ? impl::Endian::little : impl::Endian::big;
         }
 
-        /// count the number of items in the format
-        /// @param array_as_one [IN] if true, count byte/char aray as one item (default)
+        /**
+         * @tparam Fmt The static format string created with macro BP_STRING
+         * @param f [IN] instance of Fmt for auto template deduction
+         * @param count_padding [IN] if true count padding type formats
+         * @param count_normal [IN] if true count non-padding type formats
+         * @return count of items
+         */
         template <typename Fmt>
-        constexpr size_t count_items(Fmt f, const bool ignore_padding = false) noexcept
+        constexpr size_t count_fmt_items(Fmt f, const bool count_padding = true, const bool count_normal = true) noexcept
         {
             static_assert(validate_format(Fmt{}), "Invalid Format!");
             size_t itemCount = 0;
-            bool is_padding = false;
+            bool count_item = false;
 
             for(size_t i = 0; i < Fmt::size(); i++) {
                 auto currentChar = Fmt::at(i);
@@ -397,26 +402,47 @@ namespace bitpacker {
                 }
 
                 if(impl::isFormatType(currentChar)) {
-                    is_padding = isPadding(currentChar);
+                    count_item = (isPadding(currentChar) && count_padding) || (!isPadding(currentChar) && count_normal);
                     currentChar = Fmt::at(++i);
                 }
 
                 if (impl::isDigit(currentChar)) {
                     const auto num_and_offset = impl::consume_number(Fmt::value(), i);
- 
-                    itemCount += ignore_padding && is_padding ? 0 : 1;
+
+                    itemCount += count_item ? 1 : 0;
                     i = num_and_offset.second;
                     --i; // to combat the i++ in the loop
                 }
-                is_padding = false;
+                count_item = false;
             }
             return itemCount;
+        }
+
+        /// count the number of items in the format
+        template <typename Fmt>
+        constexpr size_t count_all_items(Fmt f) noexcept
+        {
+            return count_fmt_items(Fmt{}, true, true);
+        }
+
+        /// count the number of non-padding items in the format
+        template <typename Fmt>
+        constexpr size_t count_non_padding(Fmt f) noexcept
+        {
+            return count_fmt_items(Fmt{}, false, true);
+        }
+
+        /// count the number of padding type items in the format
+        template <typename Fmt>
+        constexpr size_t count_padding(Fmt f) noexcept
+        {
+            return count_fmt_items(Fmt{}, true, false);
         }
 
         template < typename Fmt>
         constexpr auto get_type_array(Fmt f) noexcept
         {
-            std::array< RawFormatType, count_items(Fmt{}) > arr{};
+            std::array< RawFormatType, count_all_items(Fmt{}) > arr{};
             impl::Endian currentEndian = impl::Endian::big;
             size_t currentType = 0;
             size_t offset = 0;
@@ -496,8 +522,8 @@ namespace bitpacker {
                 static_assert(UnpackedType::bits == 16 || UnpackedType::bits == 32 || UnpackedType::bits == 64,
                               "Expected float size of 16, 32, or 64 bits");
             }
-            if constexpr (UnpackedType::format == 't' || UnpackedType::format == 'r') {
-                // to remain binary compatable with bitstruct: bitcount is actual bits.
+            if constexpr (isByteType(UnpackedType::format)) {
+                // to remain binary compatible with bitstruct: bitcount is actual bits.
                 // Any partial bytes end up in the last byte/char, left aligned.
                 constexpr unsigned charsize = 8U;
                 constexpr unsigned full_bytes = UnpackedType::bits / 8;
@@ -517,7 +543,7 @@ namespace bitpacker {
                 // little endian bitwise in bitstruct means the entire length flipped.
                 // to simulate this we reverse the order then flip each bytes bit order
                 if (UnpackedType::bit_endian == impl::Endian::little) {
-                    reverse(buff.begin(), buff.end());
+                    bitpacker::impl::reverse(buff.begin(), buff.end());
                     for (auto &v : buff) {
                         v = impl::reverse_bits< decltype(v), ByteSize >(v);
                     }
@@ -562,7 +588,7 @@ namespace bitpacker {
     template < typename Fmt, typename Input >
     constexpr auto unpack(Fmt, Input &&packedInput)
     {
-        return impl::unpack< Fmt >(std::make_index_sequence< count_items(Fmt{}, true) >(),
+        return impl::unpack< Fmt >(std::make_index_sequence< impl::count_non_padding(Fmt{}) >(),
                                    std::forward< Input >(packedInput));
     }
 
