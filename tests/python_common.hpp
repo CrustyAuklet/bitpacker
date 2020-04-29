@@ -157,7 +157,7 @@ auto runPythonPack(Fmt, const Args &... toPack)
     // Read the python script output
     std::ifstream inputFile(packedBinaryFilePath, std::ios::binary);
     inputFile = std::ifstream(packedBinaryFilePath, std::ios::binary);
-    std::vector< char > outputBuffer(
+    std::vector< uint8_t > outputBuffer(
         (std::istreambuf_iterator< char >(inputFile)),
         (std::istreambuf_iterator< char >()));
     inputFile.close();
@@ -169,12 +169,12 @@ auto runPythonPack(Fmt, const Args &... toPack)
     return outputBuffer;
 }
 
-inline std::string print_data_vector(const std::vector< char > &vec)
+inline std::string print_data_vector(const std::vector< uint8_t >& vec)
 {
     std::stringstream ss;
     ss << "{ ";
     for (const auto &v : vec) {
-        ss << "0x" << std::hex << (static_cast< unsigned >(v) & 0xFFU) << ", ";
+        ss << "0x" << std::hex << (static_cast< unsigned >(v)& 0xFFU) << ", ";
     }
     std::string retval = ss.str();
     return retval.substr(0, retval.size() - 2) + " }";
@@ -264,24 +264,26 @@ bool compareBitpackerTuples(const T1& lhs, const T2& rhs)
 template < typename Fmt, typename... Args >
 void testPackAgainstPython(Fmt, const Args &... toPack)
 {
-    //auto packed = bitpacker::pack(Fmt{}, toPack...);
-    auto pythonPacked = runPythonPack(Fmt{}, toPack...);
+    auto bp_packed = bitpacker::pack(Fmt{}, toPack...);
+    auto py_packed = runPythonPack(Fmt{}, toPack...);
 
-    //CAPTURE(packed);
     INFO("Format String: " << Fmt::value())
-    INFO("From Python-pack: " << print_data_vector(pythonPacked));
+    INFO("From BitPacker-pack : " << print_data_vector( std::vector<uint8_t>(bp_packed.begin(), bp_packed.end())) );
+    INFO("From Python-pack    : " << print_data_vector(py_packed));
 
-    //REQUIRE(packed.size() == pythonPacked.size());
-    //REQUIRE(std::equal(packed.begin(), packed.end(), pythonPacked.begin()));
+    REQUIRE(bp_packed.size() == py_packed.size());
+    REQUIRE(std::equal(bp_packed.begin(), bp_packed.end(), py_packed.begin(), py_packed.end()));
 
-    bitpacker::span< const bitpacker::byte_type > buffer(reinterpret_cast< uint8_t * >(pythonPacked.data()), pythonPacked.size());
-    auto unpacked = bitpacker::unpack(Fmt{}, buffer);
+    bitpacker::span< const bitpacker::byte_type > buffer(reinterpret_cast< uint8_t * >(py_packed.data()), py_packed.size());
+    auto py_unpacked = bitpacker::unpack(Fmt{}, buffer);
+    auto bp_unpacked = bitpacker::unpack(Fmt{}, bp_packed);
 
-    INFO("Unpacked by Bitpacker: " << print_data_tuple(unpacked));
+    INFO("Python Unpacked by BitPacker: " << print_data_tuple(py_unpacked));
+    INFO("BitPacker Unpacked by BitPacker: " << print_data_tuple(bp_unpacked));
     INFO("Expected (uncast): " << print_data_tuple(std::make_tuple(toPack...)));
 
     // explicitly creating tuple of ReturnTypes will make tests pass if the value is implicitly convertable to the expected return type
     // for example: multi-bit bool values
-    const bool success = compareBitpackerTuples(unpacked, std::make_tuple(toPack...));
+    const bool success = compareBitpackerTuples(py_unpacked, std::make_tuple(toPack...));
     REQUIRE(success);
 }

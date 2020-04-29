@@ -273,7 +273,6 @@ namespace bitpacker {
 
     namespace impl {
 
-
         struct format_string {
         };
 
@@ -478,6 +477,7 @@ namespace bitpacker {
 #if bitpacker_CPP20_OR_GREATER
         // constexpr in c++20 and greater
         using std::reverse;
+        using std::copy;
 #else
         // copied from cppref but constexpr, we KNOW its trivial types
         template < class BidirIt >
@@ -489,6 +489,15 @@ namespace bitpacker {
                 *last = tmp;
                 ++first;
             }
+        }
+
+        template<class InputIt, class OutputIt>
+        constexpr OutputIt copy(InputIt first, InputIt last, OutputIt d_first)
+        {
+            while (first != last) {
+                *d_first++ = *first++;
+            }
+            return d_first;
         }
 #endif
 
@@ -526,8 +535,8 @@ namespace bitpacker {
                 // to remain binary compatible with bitstruct: bitcount is actual bits.
                 // Any partial bytes end up in the last byte/char, left aligned.
                 constexpr unsigned charsize = 8U;
-                constexpr unsigned full_bytes = UnpackedType::bits / 8;
-                constexpr unsigned extra_bits = UnpackedType::bits % 8;
+                constexpr unsigned full_bytes = UnpackedType::bits / charsize;
+                constexpr unsigned extra_bits = UnpackedType::bits % charsize;
                 constexpr size_t return_size = bit2byte(UnpackedType::bits);
                 typename UnpackedType::return_type buff{};
                 
@@ -604,6 +613,141 @@ namespace bitpacker {
         const auto unpacked = std::make_tuple(
             impl::unpackElement< typename std::tuple_element_t< Items, FormatTypes > >(packedInput, formats[Items].offset)...);
         return unpacked;
+    }
+
+/***************************************************************************************************
+* Compile time packing functionality
+***************************************************************************************************/
+
+    namespace impl {
+
+        template <size_t N>
+        constexpr auto remove_non_padding(const std::array< RawFormatType, N > &types) noexcept
+        {
+            std::array< RawFormatType, N > buff{};
+            size_t insert_idx = 0;
+            for (const auto& t : types) {
+                if (isPadding(t.formatChar)) {
+                    buff[insert_idx++] = t;
+                }
+            }
+            return buff;
+        }
+
+        template <typename RepType, typename T>
+        constexpr RepType convert_for_pack(const T& val)
+        {
+            return static_cast<RepType>(val);
+        }
+
+        template <typename PackedType, typename InputType>
+        constexpr int packElement(span<byte_type> buffer, size_t offset, InputType elem)
+        {
+            // TODO: Implement these formats
+            static_assert(PackedType::format != 'f', "Unpacking Floats not supported yet...");
+
+            if constexpr (PackedType::format == 'u' || PackedType::format == 's') {
+                static_assert(PackedType::bits <= 64, "Integer types must be 64 bits or less");
+                auto val = convert_for_pack< typename PackedType::rep_type >(elem);
+                if (PackedType::bit_endian == impl::Endian::little) {
+                    val = impl::reverse_bits< decltype(val), PackedType::bits >(val);
+                }
+                pack_into(buffer, offset, PackedType::bits, val);
+            }
+            if constexpr (PackedType::format == 'b') {
+                static_assert(PackedType::bits <= 64, "Boolean types must be 64 bits or less");
+                pack_into(buffer, offset, PackedType::bits, static_cast<bool>(elem));
+            }
+            if constexpr (isPadding(PackedType::format)) {
+                static_assert(PackedType::bits <= 64, "Padding fields must be 64 bits or less");
+                if(PackedType::format == 'P') {
+                    constexpr auto val = static_cast< unsigned_type<PackedType::bits> >(-1);
+                    pack_into(buffer, offset, PackedType::bits, val);
+                }
+                else {
+                    pack_into(buffer, offset, PackedType::bits, 0U);
+                }
+            }
+            if constexpr (PackedType::format == 'f') {
+                static_assert(PackedType::bits == 16 || PackedType::bits == 32 || PackedType::bits == 64,
+                              "Expected float size of 16, 32, or 64 bits");
+            }
+            if constexpr (isByteType(PackedType::format)) {
+                // to remain binary compatible with bitstruct: bitcount is actual bits.
+                // Any partial bytes end up in the last byte/char, left aligned.
+                constexpr unsigned charsize = 8U;
+                constexpr unsigned full_bytes = PackedType::bits / charsize;
+                constexpr unsigned extra_bits = PackedType::bits % charsize;
+                constexpr unsigned byte_count = bit2byte(PackedType::bits);
+
+                if(PackedType::bit_endian == impl::Endian::little) {
+                    constexpr auto size = std::extent_v<decltype(elem)>;
+                    std::array<uint8_t, byte_count> arr{};
+                    bitpacker::impl::copy(&elem[0], &elem[0]+byte_count, arr.begin());
+
+                    // little endian bitwise in bitstruct means the entire length flipped.
+                    // to simulate this we reverse the order then flip each bytes bit order
+                    bitpacker::impl::reverse(std::begin(arr), std::end(arr));
+                    for(auto &v : arr) {
+                        v = impl::reverse_bits< decltype(v), ByteSize >(v);
+                    }
+
+                    for(int bits = PackedType::bits, idx = 0; bits > 0; bits -= charsize) {
+                        const auto field_size = bits < charsize ? bits : charsize;
+                        pack_into<uint8_t>(buffer, offset + (idx * charsize), charsize, arr[idx]);
+                        ++idx;
+                    }
+                }
+                else {
+                    for(int bits = PackedType::bits, idx = 0; bits > 0; bits -= charsize) {
+                        const auto field_size = bits < charsize ? bits : charsize;
+                        pack_into<uint8_t>(buffer, offset + (idx * charsize), charsize, elem[idx]);
+                        ++idx;
+                    }
+                }
+            }
+            return 0;
+        }
+
+        template <typename Fmt, size_t... Items>
+        constexpr auto insert_padding(span<byte_type> buffer, std::index_sequence<Items...>)
+        {
+            constexpr auto formats_only_pad = impl::remove_non_padding(impl::get_type_array(Fmt{}));
+            using FormatTypes = std::tuple< typename impl::FormatType< formats_only_pad[Items].formatChar,
+                                                                       formats_only_pad[Items].count,
+                                                                       formats_only_pad[Items].endian >... >;
+            int _[] = { 0, packElement< std::tuple_element_t<Items, FormatTypes> >(buffer, formats_only_pad[Items].offset, 0)... };
+            (void)_; // _ is a dummy for pack expansion
+        }
+
+        template <typename Fmt, size_t... Items, typename... Args>
+        constexpr auto pack(std::index_sequence<Items...>, Args&&... args)
+        {
+            static_assert(sizeof...(args) == sizeof...(Items), "pack expected items for packing != sizeof...(args) passed");
+            constexpr auto byte_order = impl::get_byte_order(Fmt{});
+            static_assert(byte_order == impl::Endian::big, "Unpacking little endian byte order not supported yet...");
+            constexpr auto formats_no_pad   = impl::remove_padding(impl::get_type_array(Fmt{}));
+
+            using ArrayType = std::array<byte_type, calcbytes(Fmt{})>;
+            ArrayType output{};
+
+            using FormatTypes = std::tuple< typename impl::FormatType< formats_no_pad[Items].formatChar,
+                                                                       formats_no_pad[Items].count,
+                                                                       formats_no_pad[Items].endian >... >;
+
+            impl::insert_padding<Fmt>( output, std::make_index_sequence<impl::count_padding(Fmt{})>());
+            int _[] = { 0, packElement< std::tuple_element_t<Items, FormatTypes> >(output, formats_no_pad[Items].offset, args)... };
+            (void)_; // _ is a dummy for pack expansion
+
+            return output;
+        }
+
+    }   // namespace impl
+
+    template < typename Fmt, typename... Args >
+    constexpr auto pack(Fmt, Args&&... args)
+    {
+        return impl::pack< Fmt >(std::make_index_sequence< impl::count_non_padding(Fmt{}) >(), std::forward< Args >(args)...);
     }
 
 } // namespace bitpacker
