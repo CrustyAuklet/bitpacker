@@ -15,34 +15,45 @@ TEST_CASE("consume number from format string", "[format]") {
 }
 
 TEST_CASE("Count items without endian", "[format]") {
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("u5")) == 1);
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("u5b2")) == 2);
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("t3u1s3b2r3")) == 5);
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("t10u1s3b2r3")) == 5);
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("t10u1s3b2r15")) == 5);
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("f16u1s3b2P8")) == 5);
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("b1u1s3b2p5")) == 5);
+    REQUIRE_STATIC(bpimpl::count_all_items(BP_STRING("u5")) == 1);
+    REQUIRE_STATIC(bpimpl::count_all_items(BP_STRING("u5b2")) == 2);
+    REQUIRE_STATIC(bpimpl::count_all_items(BP_STRING("t3u1s3b2r3")) == 5);
+    REQUIRE_STATIC(bpimpl::count_all_items(BP_STRING("t10u1s3b2r3")) == 5);
+    REQUIRE_STATIC(bpimpl::count_all_items(BP_STRING("t10u1s3b2r15")) == 5);
+    REQUIRE_STATIC(bpimpl::count_all_items(BP_STRING("f16u1s3b2P8")) == 5);
+    REQUIRE_STATIC(bpimpl::count_all_items(BP_STRING("b1u1s3b2p5")) == 5);
 }
 
 TEST_CASE("Count items with endian", "[format]") {
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("<u5")) == 1);
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("<u5>b2")) == 2);
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("<t3>u1<s3>b2<r3")) == 5);
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("<t10u1s3b2r3")) == 5);
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("<t10u1>s3b2r15")) == 5);
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("f16u1s3b2P8>")) == 5);
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("b1u1s3b2p5<")) == 5);
+    REQUIRE_STATIC(bpimpl::count_all_items(BP_STRING("<u5")) == 1);
+    REQUIRE_STATIC(bpimpl::count_all_items(BP_STRING("<u5>b2")) == 2);
+    REQUIRE_STATIC(bpimpl::count_all_items(BP_STRING("<t3>u1<s3>b2<r3")) == 5);
+    REQUIRE_STATIC(bpimpl::count_all_items(BP_STRING("<t10u1s3b2r3")) == 5);
+    REQUIRE_STATIC(bpimpl::count_all_items(BP_STRING("<t10u1>s3b2r15")) == 5);
+    REQUIRE_STATIC(bpimpl::count_all_items(BP_STRING("f16u1s3b2P8>")) == 5);
+    REQUIRE_STATIC(bpimpl::count_all_items(BP_STRING("b1u1s3b2p5<")) == 5);
 }
 
 TEST_CASE("Count items ignore padding", "[format]")
 {
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("<u5p5"), true) == 1);
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("<u5P6>b2"), true) == 2);
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("p3<t3>u1<s3P9>b2<r3"), true) == 5);
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("<t10u1s3b2p9p6r3"), true) == 5);
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("P10<t10u1>s3b2r15"), true) == 5);
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("f16p1s3b2P8>"), true) == 3);
-    REQUIRE_STATIC(bpimpl::count_items(BP_STRING("b1u1s3b2p5<"), true) == 4);
+    REQUIRE_STATIC(bpimpl::count_non_padding(BP_STRING("<u5p5")) == 1);
+    REQUIRE_STATIC(bpimpl::count_non_padding(BP_STRING("<u5P6>b2")) == 2);
+    REQUIRE_STATIC(bpimpl::count_non_padding(BP_STRING("p3<t3>u1<s3P9>b2<r3")) == 5);
+    REQUIRE_STATIC(bpimpl::count_non_padding(BP_STRING("<t10u1s3b2p9p6r3")) == 5);
+    REQUIRE_STATIC(bpimpl::count_non_padding(BP_STRING("P10<t10u1>s3b2r15")) == 5);
+    REQUIRE_STATIC(bpimpl::count_non_padding(BP_STRING("f16p1s3b2P8>")) == 3);
+    REQUIRE_STATIC(bpimpl::count_non_padding(BP_STRING("b1u1s3b2p5<")) == 4);
+}
+
+TEST_CASE("Count items only padding", "[format]")
+{
+    REQUIRE_STATIC(bpimpl::count_padding(BP_STRING("<u5p5")) == 1);
+    REQUIRE_STATIC(bpimpl::count_padding(BP_STRING("<u5P6>b2")) == 1);
+    REQUIRE_STATIC(bpimpl::count_padding(BP_STRING("p3<t3>u1<s3P9>b2<r3")) == 2);
+    REQUIRE_STATIC(bpimpl::count_padding(BP_STRING("<t10u1s3b2p9p6r3")) == 2);
+    REQUIRE_STATIC(bpimpl::count_padding(BP_STRING("P10<t10u1>s3b2r15")) == 1);
+    REQUIRE_STATIC(bpimpl::count_padding(BP_STRING("f16p1s3b2P8>")) == 2);
+    REQUIRE_STATIC(bpimpl::count_padding(BP_STRING("b1u1s3b2p5<")) == 1);
 }
 
 TEST_CASE("parse endianness correctly for one item", "[format]") {
