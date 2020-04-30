@@ -17,7 +17,8 @@ A library to do type-safe and low-boilerplate bit level serialization
 
 ## Highlights
 * Header only library
-* Targeting c++17 (only requires c++11 so far)
+* Requires C++14 or later for low level functions
+* Requires C++17 or later for python style interface
 * Boost License
 * works as a CMake sub-project
 
@@ -26,11 +27,12 @@ A library to do type-safe and low-boilerplate bit level serialization
 -  Produce code of a similar size/overhead as the shift and mask method
 -  Increase type safety (define how to pack and unpack a type *once*)
 -  constexpr - create static messages at compile time with no code in final binary
+-  Binary compatibility with [python bitstruct](https://pypi.org/project/bitstruct/) module
 -  If possible support older embedded compilers (may end up a separate library)
 
 ## Limitations
 -  API is *not* stable, mainly to allow flexibility in addressing other limitations and future goals
--  All fields are packed and unpacked as big endian values
+-  No float support yet
 
 ## Motivation
 On small embedded systems structures of compressed data often need to be sent between different
@@ -39,7 +41,7 @@ On small embedded systems structures of compressed data often need to be sent be
  [ProtoBuffers](https://developers.google.com/protocol-buffers),
  or [Cereal](https://uscilab.github.io/cereal/) can be used. **BUT** Sometimes this is not possible
  for various reasons:
- -  code size or RAM overhead in extremely small systems
+ -  code size and/or memory overhead in extremely small systems
  -  legacy protocols that are already set in stone with bitfields
  -  values need to be encoded in sub-byte sized fields
  
@@ -99,10 +101,13 @@ and it requires much more boilerplate (leading to more bugs). The one upside of 
 correctly it is not reliant on implementation defined behaviour.
 
 ## Solution with Bitpacker
-### Basic functionality
-Currently bitpacker consists of two free functions that work on a view of bytes using `std::span`, or
-span-lite if not compiling with c++20. Fields are abstracted to a offset and size in bits. Already this is
-much better than the other options, but produces [similar assembly](https://godbolt.org/z/Nco7VR) even on `-O1`.
+## Basic functionality
+*(C++14 compatible)*
+
+The low level BitPacker interface consists of two free functions that work on a view of bytes using 
+`std::span`<sup>1</sup>. Fields are abstracted to a offset and size in bits. Already this is
+much better than the other options, but produces [similar assembly](https://godbolt.org/z/stT9YF) 
+even on `-O1`.
 ```C++
 /// NOTE: I am ignoring any compression/transformations needed to change real values
 ///       into unsigned integers and back into real values for now.
@@ -131,18 +136,26 @@ essentially "type punning". Currently bitpacker only attempts to read values a b
 the same as the shift and mask method but abstracted behind some very basic generic programming techniques.
 
 ### Type Safety
-The above example is still not very "type safe": All values need to be cast to an unsigned integer to be
-packed with `pack_into` and `unpack_from` can only unpack unsigned integer types. Also having two integer arguments
-that mean very different things is... not great. These functions are intentionally restrictive though. They are
-mainly intended to support code generation and planned higher levels of abstractions.
+The above example is still not very "type safe": `pack_into` and `unpack_from` only support packing and
+unpacking unsigned integer types. All other types must be manually cast when packed or unpacked. Also 
+having two integer arguments that mean very different things is... not great. These functions are 
+intentionally restrictive though. They are mainly intended to support code generation, higher levels of
+abstraction, and older compilers.
 
-For now there are more type-safe helper functions in the `bitpacker` namespace: `bitpacker::store()`
-and `bitpacker::get()`. These are already specialized for all signed and unsigned fixed width integers, and
+If you are want to use these functions, but desire a slightly more type-safe interface there are two
+function templates in the `bitpacker` namespace:
+```c++
+template <typename T>
+constexpr T get(span<const byte_type> buffer, size_type offset) noexcept;
+
+template <typename T>
+constexpr void store(span<byte_type> buffer, size_type offset, T value) noexcept;
+```
+Specializations are provided for all fixed width integer types, and
 user specializations are easy to create.
 
 *NOTE: bool and floating point types are intentionally not specialized since the way to pack them
  is will change from project to project*
-
 ```C++
 /// there are better ways to do this, but just for the example here are some compression functions
 constexpr uint16_t compress_float_12(const float f) { /* Some compression method... */ }
@@ -179,17 +192,40 @@ compile time message buffers. This is very useful if, for example, a device only
 sends.
 ```C++
 /// using the function from the last example using. Values obviously not real.
-constexpr auto static_message = pack_message( { 3.3, true, false, 45.2, 1586310068 } );
+constexpr auto static_message = pack_message( { 3.3, true, false, 45.2, 16764793 } );
+```
+
+## Compile time python-like interface
+If compiled with a C++17 compiler BitPacker also provides an interface that is compatible with
+the [python bitstruct](https://pypi.org/project/bitstruct/) library. Unit tests ensure binary
+compatability and the format string semantics are the same. Format strings are parsed at compile-time,
+so the resulting code is the same as using the low level BitPacker API (sometimes better!).
+
+*NOTE: float support is not yet implemented for packing/unpacking!*
+
+[Compared to previous examples](https://godbolt.org/z/drUUQb)
+```c++
+// since float support is TBD, assume fixed point values for voltage/pressure
+constexpr auto static_message = bitpacker::pack(BP_STRING("u12b1b1u14s24"), 3300, true, false, 4500, 16764793);
+
+std::array<uint8_t, 7> make_message_py(const MessageData& data) {
+    return bitpacker::pack(BP_STRING("u12b1b1u14s24"),
+                data.voltage,
+                data.error,
+                data.other,
+                data.pressure,
+                data.time);
+}
 ```
 
 ### Future Work
-Building upon the current work, the goal is to have syntax similar to 
-[python bitstruct](https://pypi.org/project/bitstruct/) for packing and unpacking. This will
-be useful for ad-hoc use and prototyping.
-
-A container adaptor that will abstract away the offset by auto incrementing it as values are added.
-
-A separate goal is to support some sort of code generation via a DSL, similar to other serialization
+-  Packaging/install support and adding to some package managers
+-  Implement floating point support in the python-like interface for full compatibility with 
+[bitstruct](https://pypi.org/project/bitstruct/).
+-  A container adaptor that will abstract away the offset by auto incrementing it as values are added.
+This would be useful for runtime packing and hopefully be compatible with older compilers.
+-  C++03 compatible version of the low-level interface. This is looking more and more like a separate thing.
+-  Support some sort of code generation via a DSL, similar to other serialization
 libraries. This is to enable a single human readable text file that can generate code (in multiple languages)
 and documentation for bit-level message formats.
 
@@ -211,3 +247,7 @@ Contributions are welcome, have a look at the [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## License
 The project is available under the [Boost](https://www.boost.org/users/license.html) license.
+
+## Notes
+1.  If not compiling with C++20 BitPacker will look for span-lite, gsl, or gsl-lite in the system and use their
+implementation of span.
