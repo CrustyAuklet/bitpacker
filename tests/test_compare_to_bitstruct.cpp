@@ -20,7 +20,7 @@ TEST_CASE("compare to bitstruct: pack aligned", "[bitpacker::bitstruct]") {
     const unsigned size  = 4;
     const unsigned value = 5;
 
-    bitpacker::pack_into(buff, offset, size, value);
+    bitpacker::insert(buff, offset, size, value);
     pack_unsigned_integer(buff2, offset, size, value);
 
     REQUIRE( buff == buff2 );
@@ -33,7 +33,7 @@ TEST_CASE("compare to bitstruct: unaligned", "[bitpacker::bitstruct]") {
     const unsigned size  = 7;
     const unsigned value = 0x55;
 
-    bitpacker::pack_into(buff, offset, size, value);
+    bitpacker::insert(buff, offset, size, value);
     pack_unsigned_integer(buff2, offset, size, value);
 
     REQUIRE( buff == buff2 );
@@ -46,7 +46,7 @@ TEST_CASE("compare to bitstruct: across 3 bytes", "[bitpacker::bitstruct]") {
     const unsigned size  = 4+8+2;
     const unsigned value = 0x55;
 
-    bitpacker::pack_into(buff, offset, size, value);
+    bitpacker::insert(buff, offset, size, value);
     pack_unsigned_integer(buff2, offset, size, value);
 
     REQUIRE( buff == buff2 );

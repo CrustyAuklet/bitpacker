@@ -7,7 +7,7 @@
 namespace bpimpl = bitpacker::impl;
 
 TEST_CASE("consume number from format string", "[format]") {
-    using rtype = std::pair<size_t, size_t>;
+    using rtype = std::pair<bitpacker::size_type, bitpacker::size_type>;
     REQUIRE_STATIC(bpimpl::consume_number("123", 0) == rtype(123, 3));
     REQUIRE_STATIC(bpimpl::consume_number("c", 0) == rtype(0, 0));
     REQUIRE_STATIC(bpimpl::consume_number("c12345c", 1) == rtype(12345, 6));

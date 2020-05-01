@@ -113,21 +113,21 @@ even on `-O1`.
 ///       into unsigned integers and back into real values for now.
 std::array<uint8_t, 7> pack_message(const MessageData& data) {
     std::array<bitpacker::byte_type, 7> buff{};
-    bitpacker::pack_into(buff, 0, 12,  static_cast<uint16_t>(data.voltage));
-    bitpacker::pack_into(buff, 12, 1,  static_cast<uint8_t>(data.error));
-    bitpacker::pack_into(buff, 13, 1,  static_cast<uint8_t>(data.other));
-    bitpacker::pack_into(buff, 14, 14, static_cast<uint16_t>(data.pressure));
-    bitpacker::pack_into(buff, 28, 24, static_cast<uint32_t>(data.time));
+    bitpacker::insert(buff, 0, 12,  static_cast<uint16_t>(data.voltage));
+    bitpacker::insert(buff, 12, 1,  static_cast<uint8_t>(data.error));
+    bitpacker::insert(buff, 13, 1,  static_cast<uint8_t>(data.other));
+    bitpacker::insert(buff, 14, 14, static_cast<uint16_t>(data.pressure));
+    bitpacker::insert(buff, 28, 24, static_cast<uint32_t>(data.time));
     return buff;
 }
 
 MessageData unpack_message(const std::array<uint8_t, 7>& buff) {
     MessageData data{};
-    data.voltage  = bitpacker::unpack_from<uint16_t>(buff, 0, 12);
-    data.error    = bitpacker::unpack_from<uint8_t>(buff, 12, 1);
-    data.other    = bitpacker::unpack_from<uint8_t>(buff, 13, 1);
-    data.pressure = bitpacker::unpack_from<uint16_t>(buff, 14, 14);
-    data.time     = bitpacker::unpack_from<uint32_t>(buff, 28, 24);
+    data.voltage  = bitpacker::extract<uint16_t>(buff, 0, 12);
+    data.error    = bitpacker::extract<uint8_t>(buff, 12, 1);
+    data.other    = bitpacker::extract<uint8_t>(buff, 13, 1);
+    data.pressure = bitpacker::extract<uint16_t>(buff, 14, 14);
+    data.time     = bitpacker::extract<uint32_t>(buff, 28, 24);
     return data;
 }
 ```
@@ -136,14 +136,14 @@ essentially "type punning". Currently bitpacker only attempts to read values a b
 the same as the shift and mask method but abstracted behind some very basic generic programming techniques.
 
 ### Type Safety
-The above example is still not very "type safe": `pack_into` and `unpack_from` only support packing and
+The above example is still not very "type safe": `insert` and `extract` only support packing and
 unpacking unsigned integer types. All other types must be manually cast when packed or unpacked. Also 
 having two integer arguments that mean very different things is... not great. These functions are 
 intentionally restrictive though. They are mainly intended to support code generation, higher levels of
 abstraction, and older compilers.
 
 If you are want to use these functions, but desire a slightly more type-safe interface there are two
-function templates in the `bitpacker` namespace:
+function templates in the `bitpacker` namespace *(No specializations are provided)*:
 ```c++
 template <typename T>
 constexpr T get(span<const byte_type> buffer, size_type offset) noexcept;
@@ -151,8 +151,6 @@ constexpr T get(span<const byte_type> buffer, size_type offset) noexcept;
 template <typename T>
 constexpr void store(span<byte_type> buffer, size_type offset, T value) noexcept;
 ```
-Specializations are provided for all fixed width integer types, and
-user specializations are easy to create.
 
 *NOTE: bool and floating point types are intentionally not specialized since the way to pack them
  is will change from project to project*
@@ -167,11 +165,11 @@ namespace bitpacker {
     template<>
     constexpr void store(span<byte_type> buffer, size_type offset, MessageData value) noexcept {
         // assume each type has some was to cast to the unsigned types
-        pack_into(buffer, offset+0,  12, compress_float_12(data.voltage));
-        pack_into(buffer, offset+12, 1,  compress_bool(data.error));
-        pack_into(buffer, offset+13, 1,  compress_bool(data.other));
-        pack_into(buffer, offset+14, 14, compress_float_14(data.pressure));
-        pack_into(buffer, offset+28, 24, compress_time(data.time));
+        insert(buffer, offset+0,  12, compress_float_12(data.voltage));
+        insert(buffer, offset+12, 1,  compress_bool(data.error));
+        insert(buffer, offset+13, 1,  compress_bool(data.other));
+        insert(buffer, offset+14, 14, compress_float_14(data.pressure));
+        insert(buffer, offset+28, 24, compress_time(data.time));
     }
 }
 
@@ -187,7 +185,7 @@ constexpr std::array<uint8_t, 7> pack_message(const MessageData& data) {
 ```
 
 ### Constexpr
-both `pack_into` and `unpack_from` are constexpr, as are all type safe overloads. This allows the creating of
+both `insert` and `extract` are constexpr, as are all type safe overloads. This allows the creating of
 compile time message buffers. This is very useful if, for example, a device only has a few set messages that it
 sends.
 ```C++
@@ -201,7 +199,81 @@ the [python bitstruct](https://pypi.org/project/bitstruct/) library. Unit tests 
 compatability and the format string semantics are the same. Format strings are parsed at compile-time,
 so the resulting code is the same as using the low level BitPacker API (sometimes better!).
 
-*NOTE: float support is not yet implemented for packing/unpacking!*
+### Format Strings
+fmt is a string of bitorder-type-length groups, and optionally a byteorder identifier after 
+the groups. Bitorder and byteorder may be omitted. To declare the forat string use the
+macro `BP_STRING()`
+
+Bitorder is either `>` or `<`, where `>` means MSB first and `<` means LSB first. 
+If bitorder is omitted, the previous values’ bitorder is used for the current value.
+For example, in the format string `BP_STRING("u1<u2u3")`, u1 is MSB first and both u2 and u3 are LSB first.
+
+The python library supports big or little endian byte order by prefixing the format string 
+with either `>` or `<`, where `>` means most significant byte first and `<` means least significant byte first.
+If byteorder is omitted, most significant byte first is used. Currently only big endian byte order is
+supported. If a little endian byte order is specified a compile time error will result.
+
+There are eight types; `u`, `s`, `f`, `b`, `t`, `r`, `p` and `P`.
+
+  - `u` – unsigned integer
+  - `s` – signed integer
+  - `f` – floating point number of 16, 32, or 64 bits
+  - `b` – boolean
+  - `t` – text (ascii or utf-8)
+  - `r` – raw, bytes
+  - `p` – padding with zeros, ignore
+  - `P` – padding with ones, ignore
+
+*Note: Floating point support is not yet implemented, using a format string containing `f` will result
+in a compile time error*
+
+Length is the number of bits to pack the value into. For raw bytes and text, this is also bits so for best
+results should be CHAR_BIT * COUNT (but doesn't have to be)
+
+Example format string with default bit and byte ordering: `BP_STRING("u1u3p7s16")`
+
+Same format string, but with least significant byte first: `BP_STRING("u1u3p7s16<")`
+
+Same format string, but with LSB first (`<` prefix) and least significant byte 
+first (`<` suffix): `BP_STRING("<u1u3p7s16<")`
+
+### Functions:
+#### `bitpacker::unpack(format, byte_container)`
+Unpack `byte_container` according to given format string `format`.
+The result is a tuple even if it contains exactly one item.
+`byte_container` is any literal or container that can be used to construct 
+a `span<const bitpacker::byte_type>`
+
+#### `bitpacker::unpack_from(format, byte_container, start_bit)`
+Unpack `byte_container` (collection of `bitpacker::byte_type`) according to given format
+string `format`, starting at given bit offset `start_bit`. The result is a tuple even if it
+contains exactly one item.
+`byte_container` is any literal or container that can be used to construct 
+a `span<const bitpacker::byte_type>`
+
+#### `bitpacker::pack(format, args...)`
+Pack `args...` into an array of bytes according to given format string `format`.
+returns a new `std:array<bitpacker::byte_type, N>` with N equal to `calcbytes(format)`
+
+#### `bitpacker::pack_into(format, byte_container, start_bit, args...)`
+Pack `args...` into `byte_container`, starting at given bit offset offset `start_bit`.
+Pack according to given format string `format`.
+`byte_container` is a `std::array<byte_type, N>` where `N` is at least large enough to hold
+`calcbytes(format)` and the given starting bit offset.
+*Note: unlike python version, there is no option to ignore padding bits.
+padding bits are ALWAYS set to the specified value*
+
+#### `bitpacker::calcsize(format)`
+Calculate the number of bits in given format string format.
+
+#### `bitpacker::calcbytes(format)`
+Calculate the number of bits in given format string format.
+Equal to `calcsize()` rounded up to nearest multiple of `CHAR_BIT`.
+
+#### Limitations:
+-  float support is not yet implemented for packing/unpacking (yet...)
+-  little endian **byte** order not yet implemented for packing/unpacking  (yet...)
+-  No packing/unpacking with dictionaries (probably never, unless I find a good constexpr dictionary lib)
 
 [Compared to previous examples](https://godbolt.org/z/drUUQb)
 ```c++
@@ -220,7 +292,7 @@ std::array<uint8_t, 7> make_message_py(const MessageData& data) {
 
 ### Future Work
 -  Packaging/install support and adding to some package managers
--  Implement floating point support in the python-like interface for full compatibility with 
+-  Implement floating point support and little endian byte order for full compatibility with 
 [bitstruct](https://pypi.org/project/bitstruct/).
 -  A container adaptor that will abstract away the offset by auto incrementing it as values are added.
 This would be useful for runtime packing and hopefully be compatible with older compilers.

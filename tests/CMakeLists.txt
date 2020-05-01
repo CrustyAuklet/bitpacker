@@ -52,6 +52,8 @@ if(BITPACKER_USE_CXX17)
             python_common.hpp
             test_bincompat_integers.cpp
             test_bincompat_arrays.cpp
+            test_bincompat_into_integers.cpp
+            test_bincompat_into_arrays.cpp
         )
 
     add_executable(bitpacker_test_tmp_helpers)

@@ -1,5 +1,5 @@
 ---
-Checks:          '*,-fuchsia-*,-google-*,-zircon-*,-abseil-*,-modernize-use-trailing-return-type,-llvm-*,-modernize-use-auto,-readability-magic-numbers,-cppcoreguidelines-avoid-magic-numbers,-hicpp-use-auto'
+Checks:          '*,-fuchsia-*,-google-*,-zircon-*,-abseil-*,-modernize-use-trailing-return-type,-llvm-*,-modernize-use-auto,-readability-magic-numbers,-cppcoreguidelines-avoid-magic-numbers,-hicpp-use-auto,-misc-unused-parameters'
 WarningsAsErrors: '1'
 HeaderFilterRegex: ''
 FormatStyle:     none

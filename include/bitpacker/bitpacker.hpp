@@ -32,6 +32,7 @@
 #define bitpacker_CPP20_OR_GREATER  ( bitpacker_CPLUSPLUS > 201703L )
 
 #if bitpacker_CPP20_OR_GREATER && defined(__has_include )
+#include <algorithm>
 # if __has_include( <span> )
 #  define bitpacker_HAVE_STD_SPAN  1
 # else
@@ -96,32 +97,13 @@ namespace bitpacker {
         };
 
         /// returns true if the bit offset is byte aligned
-        constexpr bool is_aligned(const size_t bit_offset) noexcept {
+        constexpr bool is_aligned(const size_type bit_offset) noexcept {
             return (bit_offset % ByteSize) == 0;
         }
 
         /// returns true if the offset is byte aligned
         constexpr bool is_aligned(const Offset offset) noexcept {
             return offset.bit == 0;
-        }
-
-        constexpr bool operator==(const Offset& lhs, const Offset& rhs) {
-            return lhs.byte == rhs.byte && lhs.bit == rhs.bit;
-        }
-        constexpr bool operator>(const Offset& lhs, const Offset& rhs) {
-            return lhs.byte > rhs.byte || ( lhs.byte == rhs.byte && lhs.bit > rhs.bit );
-        }
-        constexpr bool operator<(const Offset& lhs, const Offset& rhs) {
-            return lhs.byte < rhs.byte || ( lhs.byte == rhs.byte && lhs.bit < rhs.bit );
-        }
-        constexpr bool operator!=(const Offset& lhs, const Offset& rhs) {
-            return !(lhs == rhs);
-        }
-        constexpr bool operator>=(const Offset& lhs, const Offset& rhs) {
-            return lhs > rhs || lhs == rhs;
-        }
-        constexpr bool operator<=(const Offset& lhs, const Offset& rhs) {
-            return lhs < rhs || lhs == rhs;
         }
 
         /// get the byte and bit offset of a given bit number
@@ -137,14 +119,16 @@ namespace bitpacker {
             return static_cast<byte_type>(~static_cast<byte_type>(right_mask(n) >> 1U));
         }
 
-        template <size_t NumBits>
+        /// finds the smallest fixed width unsigned integer that can fit NumBits bits
+        template <size_type NumBits>
         using unsigned_type = std::conditional_t<NumBits <= 8, uint8_t,
                 std::conditional_t<NumBits <= 16, uint16_t,
                         std::conditional_t<NumBits <= 32, uint32_t,
                                 std::conditional_t<NumBits <= 64, uint64_t,
                                         void >>>>;
 
-        template <size_t NumBits>
+        /// finds the smallest fixed width signed integer that can fit NumBits bits
+        template <size_type NumBits>
         using signed_type = std::conditional_t<NumBits <= 8, int8_t,
                 std::conditional_t<NumBits <= 16, int16_t,
                         std::conditional_t<NumBits <= 32, int32_t,
@@ -152,7 +136,8 @@ namespace bitpacker {
                                         void >>>>;
 #pragma warning(push)
 #pragma warning(disable : 4293)
-        template<typename T, size_t BitSize>
+        /// sign extends an unsigned integral value to prepare for casting to a signed value.
+        template<typename T, size_type BitSize>
         constexpr signed_type<BitSize> sign_extend(T val) noexcept
         {
             using return_type = signed_type<BitSize>;
@@ -170,11 +155,14 @@ namespace bitpacker {
         }
 #pragma warning(pop)
 
-        template < typename T, size_t BitSize >
+        /// reverses the bits in the value `val`.
+        template < typename T, size_type BitSize >
         constexpr auto reverse_bits(std::remove_cv_t< T > val) noexcept
         {
+            using val_type = std::remove_reference_t< decltype(val) >;
+            static_assert(std::is_integral<val_type>::value, "bitpacker::reverse_bits: val needs to be an integral type");
             using return_type = std::remove_reference_t< std::remove_cv_t< T >>;
-            size_t count = BitSize-1;
+            size_type count = BitSize-1;
             return_type retval = val & 0x01U;
 
             val >>= 1U;
@@ -189,9 +177,19 @@ namespace bitpacker {
 
     }  // implementation namespace
 
+    /**
+     * Inserts an unsigned integral value `v` into the byte buffer `buffer`. The value will overwrite
+     * the bits from bit `offset` to `offset` + `size` counting from the most significant bit of the first byte
+     * in the buffer. Bits adjacent to this field will not be modified.
+     * @tparam ValueType Type of the value `v` to insert. Must be an unsigned integral type.
+     * @param buffer [IN/OUT] Span of bytes to insert the value `v` into
+     * @param offset [IN] the bit offset to insert at. The value `v` will begin at this bit index
+     * @param size [IN] the number of bits to use for inserting the value `v`. Must be <= 64.
+     * @param v [IN] the value to insert into the byte container
+     */
     template<typename ValueType>
-    constexpr void pack_into(span<byte_type> buffer, size_type offset, size_type size, ValueType v) noexcept {
-        static_assert( std::is_unsigned<ValueType>::value && std::is_integral<ValueType>::value, "ValueType needs to be an unsigned integral type");
+    constexpr void insert(span<byte_type> buffer, size_type offset, size_type size, ValueType v) noexcept {
+        static_assert( std::is_unsigned<ValueType>::value && std::is_integral<ValueType>::value, "bitpacker::insert : ValueType needs to be an unsigned integral type");
         const auto start = impl::get_offset(offset);
         const auto end   = impl::get_offset(offset + size - 1);
         const byte_type startMask   = impl::right_mask(start.bit);    // mask of the start byte, 1s where data is
@@ -227,8 +225,19 @@ namespace bitpacker {
         }
     }
 
+    /**
+     * Extracts an unsigned integral value from the byte buffer `buffer`. The value will be equal to
+     * the bits from bit `offset` to `offset` + `size` counting from the most significant bit of the first byte
+     * in the buffer.
+     * @tparam ReturnType The return type of this function. Must be an unsigned integral type
+     * @param buffer [IN] view of bytes to extract the value from. They will not be modified.
+     * @param offset [IN] the bit offset to extract from. The return value will begin at this bit index.
+     * @param size [IN] the number of bits to use, starting from `offset`, to construct the return value. Must be <= 64.
+     * @return The unsigned integral value contained in `buffer` bit [`offset`, `offset`+`size`-1]. If ReturnType is
+     *         not explicitly specified the smalled fixed width unsigned integer that can contain the value will be returned.
+     */
     template<typename ReturnType>
-    constexpr ReturnType unpack_from(span<const byte_type> buffer, size_type offset, size_type size) noexcept {
+    constexpr ReturnType extract(span<const byte_type> buffer, size_type offset, size_type size) noexcept {
         static_assert( std::is_unsigned<ReturnType>::value && std::is_integral<ReturnType>::value, "ReturnType needs to be an unsigned integral type");
         const auto start = impl::get_offset(offset);
         const auto end   = impl::get_offset(offset + size - 1);
@@ -302,12 +311,12 @@ namespace bitpacker {
             return isFormatMode(formatChar) || isFormatType(formatChar) || isDigit(formatChar);
         }
 
-        template <size_t Size>
-        constexpr std::pair< size_t, size_t > consume_number(const char (&str)[Size], size_t offset) {
-            size_t num = 0;
-            size_t i = offset;
+        template <size_type Size>
+        constexpr std::pair< size_type, size_type > consume_number(const char (&str)[Size], size_type offset) {
+            size_type num = 0;
+            size_type i = offset;
             for(; isDigit(str[i]) && i < Size; i++) {
-                num = static_cast<size_t>(num*10 + (str[i] - '0'));
+                num = static_cast<size_type>(num*10 + (str[i] - '0'));
             }
             return {num, i};
         }
@@ -317,12 +326,14 @@ namespace bitpacker {
             little
         };
 
-        constexpr size_t bit2byte(size_t bits) noexcept
+        /// calculate the number of bytes needed to hold the given number of bits
+        constexpr size_type bit2byte(size_type bits) noexcept
         {
-            return (bits / ByteSize) + (bits % ByteSize ? 1 : 0);
+            return (bits / ByteSize) + ((bits % ByteSize) ? 1 : 0);
         }
 
-        template <char FormatChar, size_t BitCount>
+        /// figure out the type associated with a given format character
+        template <char FormatChar, size_type BitCount>
         using format_type = std::conditional_t<FormatChar == 'u', impl::unsigned_type<BitCount>, 
             std::conditional_t<FormatChar == 's', impl::signed_type<BitCount>, 
                 std::conditional_t<FormatChar == 'f', float, 
@@ -333,24 +344,25 @@ namespace bitpacker {
 
         struct RawFormatType {
             char formatChar;    //< the format character of this items type
-            size_t count;       //< number of bits in this item
-            size_t offset;      //< offset from start of format in bits
+            size_type count;       //< number of bits in this item
+            size_type offset;      //< offset from start of format in bits
             impl::Endian endian;//< bit endianness of this value
         };
 
         // Specifying the Big Endian format
-        template <char FormatChar, size_t BitCount, impl::Endian BitEndianess>
+        template <char FormatChar, size_type BitCount, impl::Endian BitEndianess>
         struct FormatType {
             static constexpr impl::Endian bit_endian = BitEndianess;
-            static constexpr size_t bits = BitCount;        // also used for byte count for 't' and 'r' formats
+            static constexpr size_type bits = BitCount;        // also used for byte count for 't' and 'r' formats
             static constexpr char format = FormatChar;
             using return_type = format_type<FormatChar, BitCount>;
             using rep_type = impl::unsigned_type<BitCount>;
         };
 
+        /// validates the given format string
         template <typename Fmt>
-        constexpr bool validate_format(Fmt f) noexcept {
-            for(size_t i = 0; i < Fmt::size(); i++) {
+        constexpr bool validate_format(Fmt /*unused*/) noexcept {
+            for(size_type i = 0; i < Fmt::size(); i++) {
                 auto currentChar = Fmt::at(i);
                 if(impl::isFormatMode(currentChar)) {
                     if(++i == Fmt::size()){
@@ -374,7 +386,7 @@ namespace bitpacker {
 
         /// return the format mode of the entire buffer (byte order).
         template <typename Fmt>
-        constexpr impl::Endian get_byte_order(Fmt) noexcept {
+        constexpr impl::Endian get_byte_order(Fmt /*unused*/) noexcept {
             // last character is the byte order, big endian if missing
             constexpr auto last_char = Fmt::at(Fmt::size()-1);
             return last_char == '<' ? impl::Endian::little : impl::Endian::big;
@@ -388,13 +400,13 @@ namespace bitpacker {
          * @return count of items
          */
         template <typename Fmt>
-        constexpr size_t count_fmt_items(Fmt f, const bool count_padding = true, const bool count_normal = true) noexcept
+        constexpr size_type count_fmt_items(Fmt /*unused*/, const bool count_padding = true, const bool count_normal = true) noexcept
         {
             static_assert(validate_format(Fmt{}), "Invalid Format!");
-            size_t itemCount = 0;
+            size_type itemCount = 0;
             bool count_item = false;
 
-            for(size_t i = 0; i < Fmt::size(); i++) {
+            for(size_type i = 0; i < Fmt::size(); i++) {
                 auto currentChar = Fmt::at(i);
                 if(impl::isFormatMode(currentChar)) {
                     continue;
@@ -419,34 +431,35 @@ namespace bitpacker {
 
         /// count the number of items in the format
         template <typename Fmt>
-        constexpr size_t count_all_items(Fmt f) noexcept
+        constexpr size_type count_all_items(Fmt /*unused*/) noexcept
         {
             return count_fmt_items(Fmt{}, true, true);
         }
 
         /// count the number of non-padding items in the format
         template <typename Fmt>
-        constexpr size_t count_non_padding(Fmt f) noexcept
+        constexpr size_type count_non_padding(Fmt /*unused*/) noexcept
         {
             return count_fmt_items(Fmt{}, false, true);
         }
 
         /// count the number of padding type items in the format
         template <typename Fmt>
-        constexpr size_t count_padding(Fmt f) noexcept
+        constexpr size_type count_padding(Fmt /*unused*/) noexcept
         {
             return count_fmt_items(Fmt{}, true, false);
         }
 
+        /// parse the given format string to a homogenous array of objects that describe each type
         template < typename Fmt>
-        constexpr auto get_type_array(Fmt f) noexcept
+        constexpr auto get_type_array(Fmt /*unused*/) noexcept
         {
             std::array< RawFormatType, count_all_items(Fmt{}) > arr{};
             impl::Endian currentEndian = impl::Endian::big;
-            size_t currentType = 0;
-            size_t offset = 0;
+            size_type currentType = 0;
+            size_type offset = 0;
 
-            for (size_t i = 0; i < Fmt::size(); i++) {
+            for (size_type i = 0; i < Fmt::size(); i++) {
                 auto currentChar = Fmt::at(i);
                 if (impl::isFormatMode(currentChar)) {
                     currentEndian = currentChar == '>' ? impl::Endian::big : impl::Endian::little;
@@ -470,9 +483,9 @@ namespace bitpacker {
             return arr;
         }
 
-    /***************************************************************************************************
-     * Compile time unpacking functionality
-     ***************************************************************************************************/
+/****************************************************************************************************
+ * Compile time unpacking implementation
+ **************************************************************************************************/
 
 #if bitpacker_CPP20_OR_GREATER
         // constexpr in c++20 and greater
@@ -491,6 +504,7 @@ namespace bitpacker {
             }
         }
 
+        // copied from cppref but constexpr
         template<class InputIt, class OutputIt>
         constexpr OutputIt copy(InputIt first, InputIt last, OutputIt d_first)
         {
@@ -501,19 +515,20 @@ namespace bitpacker {
         }
 #endif
 
-        template <typename Fmt, size_t... Items, typename Input>
-        constexpr auto unpack(std::index_sequence<Items...>, Input&& packedInput);
+        template <typename Fmt, size_type... Items, typename Input>
+        constexpr auto unpack(std::index_sequence<Items...> /*unused*/, Input&& packedInput, const size_type start_bit);
 
+        /// does the work of unpacking each type, based on the type passed to UnpackedType
         template < typename UnpackedType >
-        constexpr auto unpackElement(span< const byte_type > buffer, size_t offset) -> typename UnpackedType::return_type
+        constexpr auto unpackElement(span< const byte_type > buffer, size_type offset) -> typename UnpackedType::return_type
         {
-            // TODO: Implement these formats
+            // TODO: Implement float unpacking
             static_assert(UnpackedType::format != 'f', "Unpacking Floats not supported yet...");
             static_assert(!isPadding(UnpackedType::format), "Something is wrong :( Padding types shouldn't get here!");
 
             if constexpr (UnpackedType::format == 'u' || UnpackedType::format == 's') {
                 static_assert(UnpackedType::bits <= 64, "Integer types must be 64 bits or less");
-                auto val = unpack_from< typename UnpackedType::rep_type >(buffer, offset, UnpackedType::bits);
+                auto val = extract< typename UnpackedType::rep_type >(buffer, offset, UnpackedType::bits);
                 if (UnpackedType::bit_endian == impl::Endian::little) {
                     val = impl::reverse_bits< decltype(val), UnpackedType::bits >(val);
                 }
@@ -524,7 +539,7 @@ namespace bitpacker {
             }
             if constexpr (UnpackedType::format == 'b') {
                 static_assert(UnpackedType::bits <= 64, "Boolean types must be 64 bits or less");
-                const auto val = unpack_from< typename UnpackedType::rep_type >(buffer, offset, UnpackedType::bits);
+                const auto val = extract< typename UnpackedType::rep_type >(buffer, offset, UnpackedType::bits);
                 return static_cast< bool >(val);
             }
             if constexpr (UnpackedType::format == 'f') {
@@ -537,15 +552,15 @@ namespace bitpacker {
                 constexpr unsigned charsize = 8U;
                 constexpr unsigned full_bytes = UnpackedType::bits / charsize;
                 constexpr unsigned extra_bits = UnpackedType::bits % charsize;
-                constexpr size_t return_size = bit2byte(UnpackedType::bits);
+                constexpr size_type return_size = bit2byte(UnpackedType::bits);
                 typename UnpackedType::return_type buff{};
                 
-                for (size_t i = 0; i < full_bytes; ++i) {
-                    buff[i] = unpack_from< uint8_t >(buffer, offset + (i * charsize), charsize);
+                for (size_type i = 0; i < full_bytes; ++i) {
+                    buff[i] = extract< uint8_t >(buffer, offset + (i * charsize), charsize);
                 }
 
                 if (extra_bits > 0) {
-                    buff[return_size - 1] = unpack_from< uint8_t >(buffer, offset + (full_bytes * charsize), extra_bits);
+                    buff[return_size - 1] = extract< uint8_t >(buffer, offset + (full_bytes * charsize), extra_bits);
                     buff[return_size - 1] <<= charsize - extra_bits; 
                 }
 
@@ -562,11 +577,12 @@ namespace bitpacker {
             }
         }
 
-        template <size_t N>
+        /// given an array from `get_type_array()`, remove all the types that represent padding
+        template <size_type N>
         constexpr auto remove_padding(const std::array< RawFormatType, N > &types) noexcept
         {
             std::array< RawFormatType, N > buff{};
-            size_t insert_idx = 0;
+            size_type insert_idx = 0;
             for (const auto& t : types) {
                 if (!isPadding(t.formatChar)) {
                     buff[insert_idx++] = t;
@@ -575,57 +591,16 @@ namespace bitpacker {
             return buff;
         }
 
-    } // namespace impl
-
-    /// Count the bits used by the given format
-    template < typename Fmt >
-    constexpr size_t calcsize(Fmt f)
-    {
-        constexpr auto type_array = impl::get_type_array(Fmt{});
-        const auto last = type_array.back();
-        return last.offset + last.count;
-    }
-
-    /// Count the number of bytes needed to hold the given format
-    template < typename Fmt >
-    constexpr size_t calcbytes(Fmt f)
-    {
-        constexpr auto bits = calcsize(Fmt{});
-        return impl::bit2byte(bits);
-    }
-
-    template < typename Fmt, typename Input >
-    constexpr auto unpack(Fmt, Input &&packedInput)
-    {
-        return impl::unpack< Fmt >(std::make_index_sequence< impl::count_non_padding(Fmt{}) >(),
-                                   std::forward< Input >(packedInput));
-    }
-
-    template < typename Fmt, size_t... Items, typename Input >
-    constexpr auto impl::unpack(std::index_sequence< Items... >, Input &&packedInput)
-    {
-        constexpr auto byte_order = impl::get_byte_order(Fmt{});
-        static_assert(byte_order == impl::Endian::big, "Unpacking little endian byte order not supported yet...");
-        constexpr auto formats = impl::remove_padding(impl::get_type_array(Fmt{}));
-
-        using FormatTypes = std::tuple< typename impl::FormatType< formats[Items].formatChar, formats[Items].count, formats[Items].endian >... >;
-
-        const auto unpacked = std::make_tuple(
-            impl::unpackElement< typename std::tuple_element_t< Items, FormatTypes > >(packedInput, formats[Items].offset)...);
-        return unpacked;
-    }
-
 /***************************************************************************************************
-* Compile time packing functionality
+* Compile time packing implementation
 ***************************************************************************************************/
 
-    namespace impl {
-
-        template <size_t N>
+        /// given an array from `get_type_array()`, remove all the types that DON'T represent padding
+        template <size_type N>
         constexpr auto remove_non_padding(const std::array< RawFormatType, N > &types) noexcept
         {
             std::array< RawFormatType, N > buff{};
-            size_t insert_idx = 0;
+            size_type insert_idx = 0;
             for (const auto& t : types) {
                 if (isPadding(t.formatChar)) {
                     buff[insert_idx++] = t;
@@ -634,16 +609,18 @@ namespace bitpacker {
             return buff;
         }
 
+        /// basic conversion function. Allows for custom specialization in the future?
         template <typename RepType, typename T>
         constexpr RepType convert_for_pack(const T& val)
         {
             return static_cast<RepType>(val);
         }
 
+        /// does the work of packing `elem`, based on the type passed to PackedType
         template <typename PackedType, typename InputType>
-        constexpr int packElement(span<byte_type> buffer, size_t offset, InputType elem)
+        constexpr int packElement(span<byte_type> buffer, size_type offset, InputType elem)
         {
-            // TODO: Implement these formats
+            // TODO: Implement float packing
             static_assert(PackedType::format != 'f', "Unpacking Floats not supported yet...");
 
             if constexpr (PackedType::format == 'u' || PackedType::format == 's') {
@@ -652,20 +629,23 @@ namespace bitpacker {
                 if (PackedType::bit_endian == impl::Endian::little) {
                     val = impl::reverse_bits< decltype(val), PackedType::bits >(val);
                 }
-                pack_into(buffer, offset, PackedType::bits, val);
+                insert(buffer, offset, PackedType::bits, val);
             }
             if constexpr (PackedType::format == 'b') {
                 static_assert(PackedType::bits <= 64, "Boolean types must be 64 bits or less");
-                pack_into(buffer, offset, PackedType::bits, static_cast<bool>(elem));
+                // cast to a bool and then to rep type to ensure:
+                //   -  value is 1 or 0 for binary compatibility with python
+                //   -  bitpacker::insert gets an unsigned integer instead of a bool to avoid warnings for shifting bools
+                insert(buffer, offset, PackedType::bits, static_cast<typename PackedType::rep_type>(static_cast<bool>(elem)));
             }
             if constexpr (isPadding(PackedType::format)) {
                 static_assert(PackedType::bits <= 64, "Padding fields must be 64 bits or less");
                 if(PackedType::format == 'P') {
                     constexpr auto val = static_cast< unsigned_type<PackedType::bits> >(-1);
-                    pack_into(buffer, offset, PackedType::bits, val);
+                    insert(buffer, offset, PackedType::bits, val);
                 }
                 else {
-                    pack_into(buffer, offset, PackedType::bits, 0U);
+                    insert(buffer, offset, PackedType::bits, 0U);
                 }
             }
             if constexpr (PackedType::format == 'f') {
@@ -694,14 +674,14 @@ namespace bitpacker {
 
                     for(int bits = PackedType::bits, idx = 0; bits > 0; bits -= charsize) {
                         const auto field_size = bits < charsize ? bits : charsize;
-                        pack_into<uint8_t>(buffer, offset + (idx * charsize), charsize, arr[idx]);
+                        insert<uint8_t>(buffer, offset + (idx * charsize), charsize, arr[idx]);
                         ++idx;
                     }
                 }
                 else {
                     for(int bits = PackedType::bits, idx = 0; bits > 0; bits -= charsize) {
                         const auto field_size = bits < charsize ? bits : charsize;
-                        pack_into<uint8_t>(buffer, offset + (idx * charsize), charsize, elem[idx]);
+                        insert<uint8_t>(buffer, offset + (idx * charsize), charsize, elem[idx]);
                         ++idx;
                     }
                 }
@@ -709,45 +689,140 @@ namespace bitpacker {
             return 0;
         }
 
-        template <typename Fmt, size_t... Items>
-        constexpr auto insert_padding(span<byte_type> buffer, std::index_sequence<Items...>)
+        /// Helper function to insert padding fields into the buffer for `pack_into()`
+        template <typename Fmt, size_type... Items>
+        constexpr auto insert_padding(span<byte_type> buffer, const size_type start_bit, std::index_sequence<Items...> /*unused*/)
         {
             constexpr auto formats_only_pad = impl::remove_non_padding(impl::get_type_array(Fmt{}));
             using FormatTypes = std::tuple< typename impl::FormatType< formats_only_pad[Items].formatChar,
                                                                        formats_only_pad[Items].count,
                                                                        formats_only_pad[Items].endian >... >;
-            int _[] = { 0, packElement< std::tuple_element_t<Items, FormatTypes> >(buffer, formats_only_pad[Items].offset, 0)... };
+            int _[] = { 0, packElement< std::tuple_element_t<Items, FormatTypes> >(buffer, formats_only_pad[Items].offset + start_bit, 0)... };
             (void)_; // _ is a dummy for pack expansion
         }
 
-        template <typename Fmt, size_t... Items, typename... Args>
-        constexpr auto pack(std::index_sequence<Items...>, Args&&... args)
+        /// helper function to pack types into the given buffer
+        template <typename Fmt, size_type N, size_type... Items, typename... Args>
+        constexpr void pack(std::array<byte_type, N>& output, const size_type start_bit, std::index_sequence<Items...> /*unused*/, Args&&... args)
         {
             static_assert(sizeof...(args) == sizeof...(Items), "pack expected items for packing != sizeof...(args) passed");
             constexpr auto byte_order = impl::get_byte_order(Fmt{});
             static_assert(byte_order == impl::Endian::big, "Unpacking little endian byte order not supported yet...");
             constexpr auto formats_no_pad   = impl::remove_padding(impl::get_type_array(Fmt{}));
 
-            using ArrayType = std::array<byte_type, calcbytes(Fmt{})>;
-            ArrayType output{};
-
             using FormatTypes = std::tuple< typename impl::FormatType< formats_no_pad[Items].formatChar,
                                                                        formats_no_pad[Items].count,
                                                                        formats_no_pad[Items].endian >... >;
 
-            impl::insert_padding<Fmt>( output, std::make_index_sequence<impl::count_padding(Fmt{})>());
-            int _[] = { 0, packElement< std::tuple_element_t<Items, FormatTypes> >(output, formats_no_pad[Items].offset, args)... };
+            impl::insert_padding<Fmt>( output, start_bit, std::make_index_sequence<impl::count_padding(Fmt{})>());
+            int _[] = { 0, packElement< std::tuple_element_t<Items, FormatTypes> >(output, formats_no_pad[Items].offset + start_bit, args)... };
             (void)_; // _ is a dummy for pack expansion
-
-            return output;
         }
 
     }   // namespace impl
 
-    template < typename Fmt, typename... Args >
-    constexpr auto pack(Fmt, Args&&... args)
+/***************************************************************************************************
+* Compile time python-like interface
+***************************************************************************************************/
+
+    /**
+    * get the number of bits used by a given format
+    * @param fmt [IN] format string created with macro `BP_STRING()`
+    * @return the number of bits in given format string Fmt
+    */
+    template < typename Fmt >
+    constexpr size_type calcsize(Fmt /*unused*/)
     {
-        return impl::pack< Fmt >(std::make_index_sequence< impl::count_non_padding(Fmt{}) >(), std::forward< Args >(args)...);
+        constexpr auto type_array = impl::get_type_array(Fmt{});
+        const auto last = type_array.back();
+        return last.offset + last.count;
+    }
+
+    /**
+     * get the number of bytes needed to hold a given format
+     * @param fmt [IN] format string created with macro `BP_STRING()`
+     * @return the number of bytes in given format string Fmt
+     */
+    template < typename Fmt >
+    constexpr size_type calcbytes(Fmt /*unused*/)
+    {
+        constexpr auto bits = calcsize(Fmt{});
+        return impl::bit2byte(bits);
+    }
+
+    /**
+     * Unpack packedInput (container of bytes) according to given
+     * format string fmt. The result is a tuple even if it contains exactly one item.
+     * @param fmt [IN] format string created with macro `BP_STRING()`
+     * @param packedInput [IN] container of byte types
+     * @return tuple of results according to format string
+     */
+    template < typename Fmt, typename Input >
+    constexpr auto unpack(Fmt /*unused*/, Input &&packedInput)
+    {
+        return impl::unpack< Fmt >(std::make_index_sequence< impl::count_non_padding(Fmt{}) >(),
+                                   std::forward< Input >(packedInput), 0);
+    }
+
+    /**
+     * Unpack packedInput (container of bytes) according to
+     * given format string fmt, starting at given bit offset offset.
+     * The result is a tuple even if it contains exactly one item.
+     * @param fmt [IN] format string created with macro `BP_STRING()`
+     * @param packedInput [IN] container of byte types
+     * @param offset [IN] bit index to start unpacking from
+     * @return tuple of results according to format string
+     */
+    template < typename Fmt, typename Input >
+    constexpr auto unpack_from(Fmt /*unused*/, Input &&packedInput, const size_type offset)
+    {
+        return impl::unpack< Fmt >(std::make_index_sequence< impl::count_non_padding(Fmt{}) >(),
+                                   std::forward< Input >(packedInput), offset);
+    }
+
+    template < typename Fmt, size_t... Items, typename Input >
+    constexpr auto impl::unpack(std::index_sequence< Items... > /*unused*/, Input &&packedInput, const size_t start_bit)
+    {
+        constexpr auto byte_order = impl::get_byte_order(Fmt{});
+        static_assert(byte_order == impl::Endian::big, "Unpacking little endian byte order not supported yet...");
+        constexpr auto formats = impl::remove_padding(impl::get_type_array(Fmt{}));
+
+        using FormatTypes = std::tuple< typename impl::FormatType< formats[Items].formatChar, formats[Items].count, formats[Items].endian >... >;
+
+        const auto unpacked = std::make_tuple(
+            impl::unpackElement< typename std::tuple_element_t< Items, FormatTypes > >(
+                // NOLINTNEXTLINE - this is the standard implementation of std::as_bytes() from c++20
+                {reinterpret_cast<const byte_type*>(std::data(packedInput)), std::size(packedInput)},
+                formats[Items].offset+start_bit)...);
+        return unpacked;
+    }
+
+    /**
+     * Pack Args... into an array of bytes according to given format string fmt.
+     * @param fmt [IN] format string created with macro `BP_STRING()`
+     * @param args... [IN] list of arguments to pack into the format string
+     * @return std::array of bytes holding the packed data
+     */
+    template < typename Fmt, typename... Args >
+    constexpr auto pack(Fmt /*unused*/, Args&&... args)
+    {
+        std::array<byte_type, calcbytes(Fmt{})> output{};
+        impl::pack< Fmt >(output, 0, std::make_index_sequence< impl::count_non_padding(Fmt{}) >(), std::forward< Args >(args)...);
+        return output;
+    }
+
+    /**
+     * Pack Args... into data, starting at given bit offset offset, according to given format string fmt.
+     * @param fmt [IN] format string created with macro `BP_STRING()`
+     * @param data [IN/OUT] reference to existing std::array of bytes to pack into
+     * @param offset [IN] bit index to start unpacking from
+     * @param args... [IN] list of arguments to pack into the format string
+     */
+    template < typename Fmt, size_type N, typename... Args >
+    constexpr void pack_into(Fmt /*unused*/, std::array<byte_type, N>& data, const size_type offset, Args&&... args)
+    {
+        static_assert(calcbytes(Fmt{}) <= N, "bitpacker::pack_into : format larger than given array, not even counting the offset!");
+        impl::pack< Fmt >(data, offset, std::make_index_sequence< impl::count_non_padding(Fmt{}) >(), std::forward< Args >(args)...);
     }
 
 } // namespace bitpacker
@@ -755,8 +830,8 @@ namespace bitpacker {
 #define BP_STRING(s) [] { \
     struct S : bitpacker::impl::format_string { \
       static constexpr decltype(auto) value() { return s; } \
-      static constexpr size_t size() { return std::size(value()) - 1; }  \
-      static constexpr auto at(size_t i) { return value()[i]; }; \
+      static constexpr bitpacker::size_type size() { return std::size(value()) - 1; }  \
+      static constexpr auto at(bitpacker::size_type i) { return value()[i]; }; \
     }; \
     return S{}; \
   }()
