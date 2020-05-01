@@ -1,6 +1,6 @@
 #include "python_common.hpp"
 
-TEST_CASE("compare to python: single unsigned integers", "[bitpacker::binary_compat]") {
+TEST_CASE("compare to python pack: single unsigned integers", "[bitpacker::binary_compat]") {
     testPackAgainstPython(BP_STRING("u1"), 0b1U);
     testPackAgainstPython(BP_STRING("u1"), 0b0U);
     testPackAgainstPython(BP_STRING("u4"), 0b1010U);
@@ -11,7 +11,7 @@ TEST_CASE("compare to python: single unsigned integers", "[bitpacker::binary_com
     testPackAgainstPython(BP_STRING("u64"), 0xDEADBEEFCAFEBABE);
 }
 
-TEST_CASE("compare to python: single unsigned integers little-bit-endian", "[bitpacker::binary_compat]")
+TEST_CASE("compare to python pack: single unsigned integers little-bit-endian", "[bitpacker::binary_compat]")
 {
     testPackAgainstPython(BP_STRING("<u1"), 0b1U);
     testPackAgainstPython(BP_STRING("<u1"), 0b0U);
@@ -23,7 +23,7 @@ TEST_CASE("compare to python: single unsigned integers little-bit-endian", "[bit
     testPackAgainstPython(BP_STRING("<u64"), 0xDEADBEEFCAFEBABE);
 }
 
-TEST_CASE("compare to python: multiple unsigned integers", "[bitpacker::binary_compat]") {
+TEST_CASE("compare to python pack: multiple unsigned integers", "[bitpacker::binary_compat]") {
     testPackAgainstPython(BP_STRING("u4u4u8u3u5"), 5, 2, 0xff, 5, 0b11010U);
 
     testPackAgainstPython(BP_STRING("u4u10u12"), 0b1010U, 0b11'1010'0101U, 0b1001'1010'0101U);
@@ -37,7 +37,7 @@ TEST_CASE("compare to python: multiple unsigned integers", "[bitpacker::binary_c
             0xDEADBEEFCAFEBABE);
 }
 
-TEST_CASE("compare to python: multiple unsigned little endian integers", "[bitpacker::binary_compat]")
+TEST_CASE("compare to python pack: multiple unsigned little endian integers", "[bitpacker::binary_compat]")
 {
     testPackAgainstPython(BP_STRING("<u4u4u8u3u5"), 5, 2, 0xff, 5, 0b11010U);
 
@@ -52,7 +52,7 @@ TEST_CASE("compare to python: multiple unsigned little endian integers", "[bitpa
                           0xDEADBEEFCAFEBABE);
 }
 
-TEST_CASE("compare to python: multiple unsigned mixed endian integers", "[bitpacker::binary_compat]")
+TEST_CASE("compare to python pack: multiple unsigned mixed endian integers", "[bitpacker::binary_compat]")
 {
     testPackAgainstPython(BP_STRING("<u4u4u8>u3u5"), 5, 2, 0xff, 5, 0b11010U);
 
@@ -67,7 +67,7 @@ TEST_CASE("compare to python: multiple unsigned mixed endian integers", "[bitpac
                           0xDEADBEEFCAFEBABE);
 }
 
-TEST_CASE("compare to python: single signed integers", "[bitpacker::binary_compat]") {
+TEST_CASE("compare to python pack: single signed integers", "[bitpacker::binary_compat]") {
     // -1 creates all 1's
     testPackAgainstPython(BP_STRING("s1"), -1);
     testPackAgainstPython(BP_STRING("s4"), -1);
@@ -95,7 +95,7 @@ TEST_CASE("compare to python: single signed integers", "[bitpacker::binary_compa
     testPackAgainstPython(BP_STRING("s64"), 8'213'362'026'654'675'200ll);
 }
 
-TEST_CASE("compare to python: single signed little endian integers", "[bitpacker::binary_compat]")
+TEST_CASE("compare to python pack: single signed little endian integers", "[bitpacker::binary_compat]")
 {
     // -1 creates all 1's
     testPackAgainstPython(BP_STRING("<s1"), -1);
@@ -124,7 +124,7 @@ TEST_CASE("compare to python: single signed little endian integers", "[bitpacker
     testPackAgainstPython(BP_STRING("<s64"), 8'213'362'026'654'675'200ll);
 }
 
-TEST_CASE("compare to python: multiple signed integers", "[bitpacker::binary_compat]") {
+TEST_CASE("compare to python pack: multiple signed integers", "[bitpacker::binary_compat]") {
     testPackAgainstPython(BP_STRING("s4s4s8s3s5"), -8, -5, -115, -3, -10);
 
     testPackAgainstPython(BP_STRING("s4s10s12s30s43s64"), -1, -1, -1, -1, -1, -1);
@@ -139,7 +139,7 @@ TEST_CASE("compare to python: multiple signed integers", "[bitpacker::binary_com
         5, -1, 500, -2'000, 536'870'000, -4'358'146'411'000ll, 8'213'362'026'654'675'200ll, -5, 500, -2'000);
 }
 
-TEST_CASE("compare to python: multiple signed little endian integers", "[bitpacker::binary_compat]")
+TEST_CASE("compare to python pack: multiple signed little endian integers", "[bitpacker::binary_compat]")
 {
     testPackAgainstPython(BP_STRING("<s4s4s8s3s5"), -8, -5, -115, -3, -10);
 
@@ -155,7 +155,7 @@ TEST_CASE("compare to python: multiple signed little endian integers", "[bitpack
                           5, -1, 500, -2'000, 536'870'000, -4'358'146'411'000ll, 8'213'362'026'654'675'200ll, -5, 500, -2'000);
 }
 
-TEST_CASE("compare to python: multiple signed mixed endian integers", "[bitpacker::binary_compat]")
+TEST_CASE("compare to python pack: multiple signed mixed endian integers", "[bitpacker::binary_compat]")
 {
     testPackAgainstPython(BP_STRING("<s4s4>s8s3s5"), -8, -5, -115, -3, -10);
 
@@ -171,7 +171,7 @@ TEST_CASE("compare to python: multiple signed mixed endian integers", "[bitpacke
                           5, -1, 500, -2'000, 536'870'000, -4'358'146'411'000ll, 8'213'362'026'654'675'200ll, -5, 500, -2'000);
 }
 
-TEST_CASE("compare to python: bool", "[bitpacker::binary_compat]")
+TEST_CASE("compare to python pack: bool", "[bitpacker::binary_compat]")
 {
     testPackAgainstPython(BP_STRING("b1"), true);
     testPackAgainstPython(BP_STRING("b1"), false);
