@@ -20,13 +20,13 @@ else()
 endif()
 
 target_sources(bitpacker INTERFACE
-    include/bitpacker/bitpacker.hpp
-)
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/bitpacker/bitpacker.hpp>
+    )
 
 target_include_directories(bitpacker INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-)
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    )
 
 ## packaging and testing: probably only want if this is not a sub-project
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
