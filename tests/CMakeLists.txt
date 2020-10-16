@@ -35,6 +35,8 @@ target_sources(bitpacker_test_core PRIVATE
     test_pack_impl.cpp
     test_unpack_impl.cpp
     test_helpers.cpp
+    test_byte_extract.cpp
+    test_byte_insert.cpp
 )
 
 add_library(pybitstruct STATIC bitstream.h bitstream.c)
@@ -47,6 +49,7 @@ target_sources(bitpacker_test_against_bitstruct PRIVATE
 if(BITPACKER_USE_CXX17)
     message("Building c++17 tests...")
     add_executable(bitpacker_test_against_python)
+    target_compile_features(bitpacker_test_against_python INTERFACE cxx_std_17)
     target_link_libraries(bitpacker_test_against_python PRIVATE catch_main bitpacker::bitpacker)
     target_sources(bitpacker_test_against_python PRIVATE
             python_common.hpp
@@ -54,13 +57,14 @@ if(BITPACKER_USE_CXX17)
             test_bincompat_arrays.cpp
             test_bincompat_into_integers.cpp
             test_bincompat_into_arrays.cpp
-        )
+            )
 
     add_executable(bitpacker_test_tmp_helpers)
+    target_compile_features(bitpacker_test_against_python INTERFACE cxx_std_17)
     target_link_libraries(bitpacker_test_tmp_helpers PRIVATE catch_main bitpacker::bitpacker)
     target_sources(bitpacker_test_tmp_helpers PRIVATE
             test_tmp_formats.cpp
-        )
+            )
 endif()
 
 # prevents the adding of catch test projects to our project

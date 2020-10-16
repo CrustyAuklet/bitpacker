@@ -64,4 +64,15 @@
 
 #endif  // !bitpacker_HAVE_STD_SPAN
 
+// test if ew have std::is_constant_evaluated
+#if __has_include(<version>)
+#  include <version>
+#if __cpp_lib_is_constant_evaluated >= 201811L
+#  define bitpacker_HAVE_IS_CONSTANT_EVALUTATED 1
+#else
+#  define bitpacker_HAVE_IS_CONSTANT_EVALUTATED 0
+#endif  // __cpp_lib_is_constant_evaluated >= 201811L
+#endif  // __has_include(<version>)
+
+
 #endif  //BITPACKER_PLATFORM_HPP
