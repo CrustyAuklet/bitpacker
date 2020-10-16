@@ -64,89 +64,119 @@ namespace bitpacker {
 
     namespace impl {
 
-        /// Represents a given bit offset
-        struct Offset {
-            size_type byte;
-            size_type bit;
-        };
+    /// Represents a given bit offset
+    struct Offset {
+        size_type byte;
+        size_type bit;
+    };
 
-        /// returns true if the bit offset is byte aligned
-        constexpr bool is_aligned(const size_type bit_offset) noexcept {
-            return (bit_offset % ByteSize) == 0;
-        }
+    /// returns true if the bit offset is byte aligned
+    constexpr bool is_aligned(const size_type bit_offset) noexcept
+    {
+        return (bit_offset % ByteSize) == 0;
+    }
 
-        /// returns true if the offset is byte aligned
-        constexpr bool is_aligned(const Offset offset) noexcept {
-            return offset.bit == 0;
-        }
+    /// returns true if the offset is byte aligned
+    constexpr bool is_aligned(const Offset offset) noexcept
+    {
+        return offset.bit == 0;
+    }
 
-        /// get the byte and bit offset of a given bit number
-        constexpr Offset get_offset(size_type offset) noexcept {
-            return { (offset / ByteSize), (offset % ByteSize) };
-        }
-        /// create mask from the nth bit from the MSB to bit 0 (inclusive)
-        constexpr byte_type right_mask(const size_type n) noexcept {
-            return static_cast< byte_type >((1U << (ByteSize - n)) - 1);
-        }
-        /// create mask from the nth bit from the MSB to bit 8 (inclusive)
-        constexpr byte_type left_mask(const size_type n) noexcept {
-            return static_cast<byte_type>(~static_cast<byte_type>(right_mask(n) >> 1U));
-        }
+    /// get the byte and bit offset of a given bit number
+    constexpr Offset get_offset(size_type offset) noexcept
+    {
+        return {(offset / ByteSize), (offset % ByteSize)};
+    }
+    /// create mask from the nth bit from the MSB to bit 0 (inclusive)
+    constexpr byte_type right_mask(const size_type n) noexcept
+    {
+        return static_cast< byte_type >((1U << (ByteSize - n)) - 1);
+    }
+    /// create mask from the nth bit from the MSB to bit 8 (inclusive)
+    constexpr byte_type left_mask(const size_type n) noexcept
+    {
+        return static_cast< byte_type >(~static_cast< byte_type >(right_mask(n) >> 1U));
+    }
 
-        /// finds the smallest fixed width unsigned integer that can fit NumBits bits
-        template <size_type NumBits>
-        using unsigned_type = std::conditional_t<NumBits <= 8, uint8_t,
-                std::conditional_t<NumBits <= 16, uint16_t,
-                        std::conditional_t<NumBits <= 32, uint32_t,
-                                std::conditional_t<NumBits <= 64, uint64_t,
-                                        void >>>>;
+    /// finds the smallest fixed width unsigned integer that can fit NumBits bits
+    template < size_type NumBits >
+    using unsigned_type = std::conditional_t< NumBits <= 8, uint8_t,
+                                              std::conditional_t< NumBits <= 16, uint16_t,
+                                                                  std::conditional_t< NumBits <= 32, uint32_t,
+                                                                                      std::conditional_t< NumBits <= 64, uint64_t,
+                                                                                                          void > > > >;
 
-        /// finds the smallest fixed width signed integer that can fit NumBits bits
-        template <size_type NumBits>
-        using signed_type = std::conditional_t<NumBits <= 8, int8_t,
-                std::conditional_t<NumBits <= 16, int16_t,
-                        std::conditional_t<NumBits <= 32, int32_t,
-                                std::conditional_t<NumBits <= 64, int64_t,
-                                        void >>>>;
+    /// finds the smallest fixed width signed integer that can fit NumBits bits
+    template < size_type NumBits >
+    using signed_type = std::conditional_t< NumBits <= 8, int8_t,
+                                            std::conditional_t< NumBits <= 16, int16_t,
+                                                                std::conditional_t< NumBits <= 32, int32_t,
+                                                                                    std::conditional_t< NumBits <= 64, int64_t,
+                                                                                                        void > > > >;
 #pragma warning(push)
 #pragma warning(disable : 4293)
-        /// sign extends an unsigned integral value to prepare for casting to a signed value.
-        template<typename T, size_type BitSize>
-        constexpr signed_type<BitSize> sign_extend(T val) noexcept
-        {
-            using return_type = signed_type<BitSize>;
-            static_assert( std::is_unsigned<T>::value && std::is_integral<T>::value, "ValueType needs to be an unsigned integral type");
-            // warning disabled for shifts bigger than type, since this if statement avoids that case.
-            // if constexpr would work too, but trying to keep this section c++14 compatable
-            if (BitSize < (sizeof(T)*ByteSize)) {
-                const T upper_mask = static_cast<T>(~((static_cast<return_type>(1U) << BitSize) - 1));
-                const T msb = static_cast<return_type>(1U) << (BitSize - 1);
-                if (val & msb) { 
-                    return static_cast<return_type>(val | upper_mask);
-                }
+    /// sign extends an unsigned integral value to prepare for casting to a signed value.
+    template < typename T, size_type BitSize >
+    constexpr signed_type< BitSize > sign_extend(T val) noexcept
+    {
+        using return_type = signed_type< BitSize >;
+        static_assert(std::is_unsigned< T >::value && std::is_integral< T >::value, "ValueType needs to be an unsigned integral type");
+        // warning disabled for shifts bigger than type, since this if statement avoids that case.
+        // if constexpr would work too, but trying to keep this section c++14 compatable
+        if (BitSize < (sizeof(T) * ByteSize)) {
+            const T upper_mask = static_cast< T >(~((static_cast< return_type >(1U) << BitSize) - 1));
+            const T msb = static_cast< return_type >(1U) << (BitSize - 1);
+            if (val & msb) {
+                return static_cast< return_type >(val | upper_mask);
             }
-            return static_cast<return_type>(val);
         }
+        return static_cast< return_type >(val);
+    }
 #pragma warning(pop)
 
         /// reverses the bits in the value `val`.
-        template < typename T, size_type BitSize >
-        constexpr auto reverse_bits(std::remove_cv_t< T > val) noexcept
-        {
-            using val_type = std::remove_reference_t< decltype(val) >;
-            static_assert(std::is_integral<val_type>::value, "bitpacker::reverse_bits: val needs to be an integral type");
-            using return_type = std::remove_reference_t< std::remove_cv_t< T >>;
-            size_type count = BitSize-1;
-            return_type retval = val & 0x01U;
+        template<typename T> constexpr T reverse_bits(T val);
 
-            val >>= 1U;
-            while (val && count) {
-                retval <<= 1U;
-                retval |= val & 0x01U;
-                val >>= 1U;
-                --count;
-            }
-            return retval << count; 
+        template<>
+        constexpr uint8_t reverse_bits(uint8_t value)
+        {
+            value = ((value & 0xAAU) >> 1U) | ((value & 0x55U) << 1U);
+            value = ((value & 0xCCU) >> 2U) | ((value & 0x33U) << 2U);
+            value = ((value & 0xF0U) >> 4U) | ((value & 0x0FU) << 4U);
+            return value;
+        }
+
+        template<>
+        constexpr uint16_t reverse_bits(uint16_t value)
+        {
+            value = ((value & 0xAAAAU) >> 1U) | ((value & 0x5555U) << 1U);
+            value = ((value & 0xCCCCU) >> 2U) | ((value & 0x3333U) << 2U);
+            value = ((value & 0xF0F0U) >> 4U) | ((value & 0x0F0FU) << 4U);
+            value = (value >> 8U) | (value << 8U);
+            return value;
+        }
+
+        template<>
+        constexpr uint32_t reverse_bits(uint32_t value)
+        {
+            value = ((value & 0xAAAAAAAAU) >> 1U) | ((value & 0x55555555U) << 1U);
+            value = ((value & 0xCCCCCCCCU) >> 2U) | ((value & 0x33333333U) << 2U);
+            value = ((value & 0xF0F0F0F0U) >> 4U) | ((value & 0x0F0F0F0FU) << 4U);
+            value = ((value & 0xFF00FF00U) >> 8U) | ((value & 0x00FF00FFU) << 8U);
+            value = (value >> 16U) | (value << 16U);
+            return value;
+        }
+
+        template<>
+        constexpr uint64_t reverse_bits(uint64_t value)
+        {
+            value = ((value & 0xAAAAAAAAAAAAAAAAU) >>  1U) | ((value & 0x5555555555555555U) <<  1U);
+            value = ((value & 0xCCCCCCCCCCCCCCCCU) >>  2U) | ((value & 0x3333333333333333U) <<  2U);
+            value = ((value & 0xF0F0F0F0F0F0F0F0U) >>  4U) | ((value & 0x0F0F0F0F0F0F0F0FU) <<  4U);
+            value = ((value & 0xFF00FF00FF00FF00U) >>  8U) | ((value & 0x00FF00FF00FF00FFU) <<  8U);
+            value = ((value & 0xFFFF0000FFFF0000U) >> 16U) | ((value & 0x0000FFFF0000FFFFU) << 16U);
+            value = (value >> 32U) | (value << 32U);
+            return value;
         }
 
     }  // implementation namespace

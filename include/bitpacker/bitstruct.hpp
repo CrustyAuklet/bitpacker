@@ -263,7 +263,7 @@ namespace impl {
                 static_assert(UnpackedType::bits <= 64, "Integer types must be 64 bits or less");
                 auto val = extract< typename UnpackedType::rep_type >(buffer, offset, UnpackedType::bits);
                 if (UnpackedType::bit_endian == impl::Endian::little) {
-                    val = impl::reverse_bits< decltype(val), UnpackedType::bits >(val);
+                    val = impl::reverse_bits< decltype(val) >(val) >> ((sizeof(val)*ByteSize) - UnpackedType::bits); // TODO2
                 }
                 if constexpr (UnpackedType::format == 's') {
                     return impl::sign_extend< decltype(val), UnpackedType::bits >(val);
@@ -302,7 +302,7 @@ namespace impl {
                 if (UnpackedType::bit_endian == impl::Endian::little) {
                     bitpacker::impl::reverse(buff.begin(), buff.end());
                     for (auto &v : buff) {
-                        v = impl::reverse_bits< decltype(v), ByteSize >(v);
+                        v = impl::reverse_bits< std::make_unsigned_t<std::remove_reference_t<decltype(v)>> >(v);
                     }
                 }
 
@@ -360,7 +360,7 @@ namespace impl {
                 static_assert(PackedType::bits <= 64, "Integer types must be 64 bits or less");
                 auto val = convert_for_pack< typename PackedType::rep_type >(elem);
                 if (PackedType::bit_endian == impl::Endian::little) {
-                    val = impl::reverse_bits< decltype(val), PackedType::bits >(val);
+                    val = impl::reverse_bits< decltype(val) >(val) >> ((sizeof(val)*ByteSize) - PackedType::bits); // TODO2
                 }
                 insert(buffer, offset, PackedType::bits, val);
             }
@@ -402,7 +402,7 @@ namespace impl {
                     // to simulate this we reverse the order then flip each bytes bit order
                     bitpacker::impl::reverse(std::begin(arr), std::end(arr));
                     for(auto &v : arr) {
-                        v = impl::reverse_bits< decltype(v), ByteSize >(v);
+                        v = impl::reverse_bits< std::make_unsigned_t<std::remove_reference_t<decltype(v)>> >(v);
                     }
 
                     for(int bits = PackedType::bits, idx = 0; bits > 0; bits -= charsize) {
