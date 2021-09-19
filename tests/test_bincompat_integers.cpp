@@ -1,4 +1,5 @@
 #include "python_common.hpp"
+#include "bitpacker/bitstruct.hpp"
 
 TEST_CASE("compare to python pack: single unsigned integers", "[bitpacker::binary_compat]") {
     testPackAgainstPython(BP_STRING("u1"), 0b1U);

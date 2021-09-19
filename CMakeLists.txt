@@ -6,6 +6,8 @@ project(bitpacker
 )
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
+include(scripts)
+conan_init(cmake_paths)
 
 add_library(bitpacker INTERFACE)
 add_library(bitpacker::bitpacker ALIAS bitpacker)
@@ -18,10 +20,6 @@ else()
     message("Using Bitpacker in C++14 mode...")
     target_compile_features(bitpacker INTERFACE cxx_std_14)
 endif()
-
-target_sources(bitpacker INTERFACE
-    include/bitpacker/bitpacker.hpp
-)
 
 target_include_directories(bitpacker INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

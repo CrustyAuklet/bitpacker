@@ -1,4 +1,5 @@
 #include "python_common.hpp"
+#include "bitpacker/bitstruct.hpp"
 
 TEST_CASE("compare to python pack_into: byte array", "[bitpacker::binary_compat]")
 {

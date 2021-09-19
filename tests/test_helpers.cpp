@@ -1,4 +1,5 @@
 #include "test_common.hpp"
+#include "bitpacker/bitpack.hpp"
 #include <array>
 
 TEST_CASE("reverse bits", "[bitpacker::reverse-bits]") {

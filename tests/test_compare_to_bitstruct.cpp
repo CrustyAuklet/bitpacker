@@ -1,5 +1,6 @@
 #include "test_common.hpp"
 #include "bitstream.h"
+#include "bitpacker/bitpack.hpp"
 #include <array>
 
 template <std::size_t SIZE>

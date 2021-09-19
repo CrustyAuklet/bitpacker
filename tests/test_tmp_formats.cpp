@@ -1,6 +1,7 @@
 #define CATCH_CONFIG_ENABLE_PAIR_STRINGMAKER
 #include "test_common.hpp"
 #include "constexpr_helpers.h"
+#include "bitpacker/bitstruct.hpp"
 #include <array>
 #include <utility>
 

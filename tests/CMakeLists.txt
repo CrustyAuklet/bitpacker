@@ -1,33 +1,14 @@
-find_package(Catch2 QUIET)
+find_package(Catch2 REQUIRED)
+find_package(span-lite REQUIRED)
 
 add_library(catch_main STATIC )
-target_compile_features(catch_main PUBLIC cxx_std_11)
+target_compile_features(catch_main PUBLIC cxx_std_17)
 target_sources(catch_main PUBLIC
         test_main.cpp
         test_common.hpp
         constexpr_helpers.h
         )
-
-if(Catch2_FOUND)
-    target_link_libraries(catch_main PUBLIC Catch2::Catch2)
-else()
-    message("Catch2 not found, installing with Conan...")
-    if(NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
-        message( STATUS "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")
-        file(DOWNLOAD "https://github.com/conan-io/cmake-conan/raw/v0.15/conan.cmake" "${CMAKE_BINARY_DIR}/conan.cmake")
-    endif()
-
-    include(${CMAKE_BINARY_DIR}/conan.cmake)
-    conan_add_remote(NAME bincrafters URL https://api.bintray.com/conan/bincrafters/public-conan)
-
-    conan_cmake_run(
-            REQUIRES catch2/2.11.0
-            BASIC_SETUP
-            CMAKE_TARGETS # individual targets to link to
-            BUILD missing)
-
-    target_link_libraries(catch_main PUBLIC CONAN_PKG::catch2)
-endif()
+target_link_libraries(catch_main PUBLIC Catch2::Catch2 nonstd::span-lite)
 
 add_executable(bitpacker_test_core)
 target_link_libraries(bitpacker_test_core PRIVATE catch_main bitpacker::bitpacker)

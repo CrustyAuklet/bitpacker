@@ -1,63 +1,72 @@
-#BasedOnStyle: LLVM
-AccessModifierOffset: -4
-AlignAfterOpenBracket: Align
-AlignConsecutiveMacros: true
-AlignEscapedNewlines: Left
-AlignOperands: true
-AlignTrailingComments: true
-AllowAllArgumentsOnNextLine: true
-AllowAllConstructorInitializersOnNextLine: true
-AllowAllParametersOfDeclarationOnNextLine: true
-#AllowShortBlocksOnASingleLine: true
-#AllowShortCaseLabelsOnASingleLine: true
-#AllowShortFunctionsOnASingleLine: InlineOnly
-#AllowShortIfStatementsOnASingleLine: true
-#AllowShortLambdasOnASingleLine: Inline
-#AllowShortLoopsOnASingleLine: true
-AlwaysBreakAfterReturnType: None
-AlwaysBreakBeforeMultilineStrings: false
-AlwaysBreakTemplateDeclarations: Yes
-BreakBeforeBraces: Stroustrup
-BreakConstructorInitializers: AfterColon
-BreakInheritanceList: AfterColon
-ColumnLimit: 0
-CompactNamespaces: false
-Cpp11BracedListStyle: true
-DerivePointerAlignment: false
-FixNamespaceComments: true
-IndentCaseLabels: true
-IndentPPDirectives: AfterHash
-IndentWidth: 4
-IndentWrappedFunctionNames: false
-KeepEmptyLinesAtTheStartOfBlocks: true
+---
 Language: Cpp
+BasedOnStyle: Google
+ColumnLimit: 175  # Short column limits are dated and limiting in C++ when trying to be explicit. Use common sense.
+BreakBeforeBraces: Custom  # Like Stroustrup, but don't wrap after function calls
+BraceWrapping:
+  BeforeCatch: true
+  BeforeElse: true
+Standard: Auto  # (Non-Deviation) Detect standard version to avoid issues in legacy code
+
+# rules that cause more substantial source changes
+UseCRLF: false  # (Non-Deviation) Source Files should always use LF line endings for portability!
+UseTab: Never  # (Non-Deviation) Stick to a single whitespace style within a file!
+DeriveLineEnding: true   # (Non-Deviation) Don't force LF line endings if the entire file is CRLF
+DerivePointerAlignment: false  # (Non-Deviation) Obey style guide since this is not a breaking change
+ReflowComments: true  # (Non-Deviation) Obey style guide since this is not a breaking change
+FixNamespaceComments: true
+
+### empty lines and space related style
 MaxEmptyLinesToKeep: 2
-SortIncludes: false
-SortUsingDeclarations: false
+EmptyLineAfterAccessModifier: Leave
+EmptyLineBeforeAccessModifier: LogicalBlock
+
+### Indention related rules
+IndentWidth: 4  # a compromise between 2 and 8
+AccessModifierOffset: -4  # Access modifiers with no indent over parent class. LLVM style.
+NamespaceIndentation: All  # Indent namespaces to make hierarchy more explicit
+IndentPPDirectives: None  # (Non-Deviation)
+ConstructorInitializerIndentWidth: 4  # (Non-Deviation)
+ContinuationIndentWidth: 4  # (Non-Deviation)
+
+### Code Alignment rules
+PointerAlignment: Left  # (Non-Deviation) Pointer is part of the type, so keep with the type-name
+AlignTrailingComments: true  # Documentation comments for many assignments in a row to line up
+
+### Rules to allow or ban compressing code to one line
+AllowShortBlocksOnASingleLine: Empty  # allow empty blocks on one line for common polling patterns in blocking APIs
+AllowShortCaseLabelsOnASingleLine: false  # (Non-Deviation) Disable formatting if necessary for metaprogramming
+AllowShortFunctionsOnASingleLine: Empty  # Only empty functions. Single line functions with any code can make debugging and trace difficult.
+AllowShortLambdasOnASingleLine: All  # (Non-Deviation) lambdas are a special case since they are often assigned to variables
+AllowShortIfStatementsOnASingleLine: Never  # Distinct lines are better for trace and debug
+AllowShortLoopsOnASingleLine: false  # Distinct lines are better for trace and debug
+
+### Heuristics to tell clang-format where to break long lines
+PenaltyBreakAssignment: 1000
+PenaltyBreakBeforeFirstCallParameter: 1
+PenaltyBreakComment: 300
+PenaltyBreakFirstLessLess: 120
+PenaltyBreakString: 1000
+PenaltyBreakTemplateDeclaration: 10
+PenaltyExcessCharacter: 500
+PenaltyReturnTypeOnItsOwnLine: 200
+
+### Rules related to whitespace within statements
 SpaceAfterCStyleCast: false
 SpaceAfterLogicalNot: false
+SpaceAfterTemplateKeyword: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCpp11BracedList: false
+SpaceBeforeCtorInitializerColon: true
 SpaceBeforeInheritanceColon: true
-SpaceBeforeParens: ControlStatements
 SpaceBeforeRangeBasedForLoopColon: true
+SpaceInEmptyBlock: false
 SpaceInEmptyParentheses: false
-SpacesInAngles: true
 SpacesBeforeTrailingComments: 2
+SpacesInAngles:  false
+SpacesInConditionalStatement: false
 SpacesInContainerLiterals: true
-Standard: Cpp11
-TabWidth: 4
-UseTab: Never
-BraceWrapping:
-  AfterClass: true
-  AfterControlStatement: false
-  AfterEnum: false
-  AfterFunction: true
-  AfterNamespace: false
-  AfterObjCDeclaration: false
-  AfterStruct: true
-  AfterUnion: false
-  BeforeCatch: false
-  BeforeElse: false
-  IndentBraces: false
-  SplitEmptyFunction: false
-  SplitEmptyNamespace: true
-  SplitEmptyRecord: true
+SpacesInCStyleCastParentheses: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+SpaceBeforeSquareBrackets: false
