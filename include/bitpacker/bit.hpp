@@ -21,17 +21,6 @@
 
 namespace bitpacker {
 
-    using size_type = std::size_t;
-    constexpr size_type ByteSize = sizeof(byte_type) * CHAR_BIT;
-    static_assert(CHAR_BIT == 8, "The target system has bytes that are not 8 bits!");
-    static_assert(static_cast<unsigned>(-1) == ~0U, "The target system is not 2's compliment! Default pack specializations will not work!");
-    static_assert(
-#if bitpacker_CPP17_OR_GREATER && defined(BITPACKER_USE_STD_BYTE)
-        std::is_same<byte_type, std::byte>::value ||
-#endif
-            std::is_unsigned<byte_type>::value && std::is_integral<byte_type>::value && sizeof(byte_type) == 1U,
-        "ByteType needs to be either std::byte or uint8_t");
-
     /**
      * Checks if the given bit offset is aligned with respect to the systems byte representation
      * shall return the equivalent of `bit_offset % CHAR_BIT == 0`
