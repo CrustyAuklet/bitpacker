@@ -10,6 +10,11 @@ target_sources(catch_main PUBLIC
         )
 target_link_libraries(catch_main PUBLIC Catch2::Catch2 nonstd::span-lite)
 
+add_executable(bitpacker_test_bit_utils)
+target_link_libraries(bitpacker_test_bit_utils PRIVATE catch_main bitpacker::bitpacker)
+target_sources(bitpacker_test_bit_utils PRIVATE
+        bit.test.cpp)
+
 add_executable(bitpacker_test_core)
 target_link_libraries(bitpacker_test_core PRIVATE catch_main bitpacker::bitpacker)
 target_sources(bitpacker_test_core PRIVATE

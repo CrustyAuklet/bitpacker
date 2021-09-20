@@ -58,9 +58,9 @@ namespace bitpacker {
         /// figure out the type associated with a given format character
         template<char FormatChar, size_type BitCount>
         using format_type = std::conditional_t<
-            FormatChar == 'u', impl::unsigned_type<BitCount>,
+            FormatChar == 'u', unsigned_type<BitCount>,
             std::conditional_t<
-                FormatChar == 's', impl::signed_type<BitCount>,
+                FormatChar == 's', signed_type<BitCount>,
                 std::conditional_t<FormatChar == 'f', float,
                                    std::conditional_t<FormatChar == 'b', bool,
                                                       std::conditional_t<FormatChar == 't', std::array<char, bit2byte(BitCount)>,
@@ -80,7 +80,7 @@ namespace bitpacker {
             static constexpr size_type bits = BitCount;  // also used for byte count for 't' and 'r' formats
             static constexpr char format = FormatChar;
             using return_type = format_type<FormatChar, BitCount>;
-            using rep_type = impl::unsigned_type<BitCount>;
+            using rep_type = unsigned_type<BitCount>;
         };
 
         /// validates the given format string
@@ -246,10 +246,10 @@ namespace bitpacker {
                 static_assert(UnpackedType::bits <= 64, "Integer types must be 64 bits or less");
                 auto val = extract<typename UnpackedType::rep_type>(buffer, offset, UnpackedType::bits);
                 if (UnpackedType::bit_endian == impl::Endian::little) {
-                    val = impl::reverse_bits<decltype(val), UnpackedType::bits>(val);
+                    val = reverse_bits<decltype(val), UnpackedType::bits>(val);
                 }
                 if constexpr (UnpackedType::format == 's') {
-                    return impl::sign_extend<decltype(val), UnpackedType::bits>(val);
+                    return sign_extend<decltype(val), UnpackedType::bits>(val);
                 }
                 return val;
             }
@@ -284,7 +284,7 @@ namespace bitpacker {
                 if (UnpackedType::bit_endian == impl::Endian::little) {
                     bitpacker::impl::reverse(buff.begin(), buff.end());
                     for (auto& v : buff) {
-                        v = impl::reverse_bits<decltype(v), ByteSize>(v);
+                        v = reverse_bits<decltype(v), ByteSize>(v);
                     }
                 }
 
@@ -338,7 +338,7 @@ namespace bitpacker {
                 static_assert(PackedType::bits <= 64, "Integer types must be 64 bits or less");
                 auto val = convert_for_pack<typename PackedType::rep_type>(elem);
                 if (PackedType::bit_endian == impl::Endian::little) {
-                    val = impl::reverse_bits<decltype(val), PackedType::bits>(val);
+                    val = reverse_bits<decltype(val), PackedType::bits>(val);
                 }
                 insert(buffer, offset, PackedType::bits, val);
             }
@@ -379,7 +379,7 @@ namespace bitpacker {
                     // to simulate this we reverse the order then flip each bytes bit order
                     bitpacker::impl::reverse(std::begin(arr), std::end(arr));
                     for (auto& v : arr) {
-                        v = impl::reverse_bits<decltype(v), ByteSize>(v);
+                        v = reverse_bits<decltype(v), ByteSize>(v);
                     }
 
                     for (int bits = PackedType::bits, idx = 0; bits > 0; bits -= charsize) {
