@@ -72,25 +72,39 @@ namespace bitpacker {
     using signed_type = std::conditional_t<
         NumBits <= 8, int8_t, std::conditional_t<NumBits <= 16, int16_t, std::conditional_t<NumBits <= 32, int32_t, std::conditional_t<NumBits <= 64, int64_t, void>>>>;
 
-#pragma warning(push)
-#pragma warning(disable : 4293)  // If a shift count is negative or too large, the behavior of the resulting image is undefined.
-    /// sign extends an unsigned integral value to prepare for casting to a signed value.
-    template<typename T, size_type BitSize>
-    constexpr signed_type<BitSize> sign_extend(T val) noexcept {
-        using return_type = signed_type<BitSize>;
-        static_assert(std::is_unsigned<T>::value && std::is_integral<T>::value, "ValueType needs to be an unsigned integral type");
-        // warning disabled for shifts bigger than type, since this if statement avoids that case.
-        // if constexpr would work too, but trying to keep this section c++14 compatable
-        if (BitSize < (sizeof(T) * ByteSize)) {
-            const T upper_mask = static_cast<T>(~((static_cast<return_type>(1U) << BitSize) - 1));
-            const T msb = static_cast<return_type>(1U) << (BitSize - 1);
-            if (val & msb) {
-                return static_cast<return_type>(val | upper_mask);
-            }
-        }
-        return static_cast<return_type>(val);
+    /**
+     * converts a field of bits of size bit_size to a signed integer via sign extension.
+     * from https://graphics.stanford.edu/~seander/bithacks.html#VariableSignExtend
+     * @tparam T signed type to convert to
+     * @param val
+     * @param bit_size
+     * @return the passed in value sign extended into type T
+     */
+    template<typename T>
+    constexpr typename T sign_extend(const typename std::make_unsigned<T>::type val, std::size_t bit_size) noexcept {
+        using return_type = typename std::make_signed<T>::type;
+        static_assert(std::is_signed<T>::value && std::is_integral<T>::value, "Type to convert to needs to be a signed integral type");
+        const auto shift_amount = (sizeof(T)*8U) - bit_size;
+        return (static_cast<return_type>(val << shift_amount) >> shift_amount);
     }
-#pragma warning(pop)
+
+    /**
+     * converts a field of bits, of known size, to a signed integer via sign extension.
+     * This version of the function only works if the bit width is known at compile time, but
+     * can save a few instructions.
+     * from https://graphics.stanford.edu/~seander/bithacks.html#FixedSignExtend
+     * @tparam T signed type to convert to
+     * @tparam BITS number of bits used within val to represent the value
+     * @param val the value to convert from a BITS wide value to a signed value of T
+     * @return the passed in value sign extended into type T
+     */
+    template <typename T, size_type BITS>
+    constexpr T sign_extend(const typename std::make_unsigned<T>::type val) noexcept {
+        static_assert(std::is_signed<T>::value && std::is_integral<T>::value, "Type to convert to needs to be a signed integral type");
+        static_assert(sizeof(T)*ByteSize >= BITS, "Size of output type must at least BITS bits");
+        struct { T x:BITS; } s;
+        return s.x = val;
+    }
 
     template<typename T>
     constexpr T reverse_bits(std::remove_cv_t<T> value);

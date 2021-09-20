@@ -68,6 +68,46 @@ TEST_CASE("test left_mask", "[bit][util]") {
     }
 }
 
+TEST_CASE("sign extend", "[bit][util]") {
+
+    SECTION("uint8_t") {
+        struct TestData { size_t bits; uint8_t input; int8_t const_result; int8_t expected; };
+        constexpr std::array<TestData, 7> results = {{
+            {1, 0b1U, bitpacker::sign_extend<int8_t>(0x01U, 1), -1},
+            {2, 0b1U, bitpacker::sign_extend<int8_t>(0x01U, 2),  1},
+            {2, 0b10U, bitpacker::sign_extend<int8_t>(0b10U, 2), static_cast<int8_t>(0xfe) },
+            {3, 0b10U, bitpacker::sign_extend<int8_t>(0b10U, 3), static_cast<int8_t>(0x02) },
+
+            {4, 0b10101010U, bitpacker::sign_extend<int8_t>(0b10101010U, 4), static_cast<int8_t>(0b11111010U) },
+            {6, 0b10101010U, bitpacker::sign_extend<int8_t>(0b10101010U, 6), static_cast<int8_t>(0b11101010U) },
+            {6, 0b01010101U, bitpacker::sign_extend<int8_t>(0b01010101U, 6), static_cast<int8_t>(0b00010101U) },
+        }};
+
+        for (const auto& [bit_size, input, const_result, expected] : results) {
+            INFO("with bit_size of " << bit_size << " we expect sign extending 0x" << std::hex << static_cast<unsigned>(input) << " to result in 0x" << static_cast<unsigned>(expected));
+            REQUIRE(const_result == expected);
+            REQUIRE(bitpacker::sign_extend<int8_t>(input, bit_size) == expected);
+        }
+    }
+
+    SECTION("uint16_t") {
+        struct TestData { size_t bits; uint16_t input; int16_t const_result; int16_t expected; };
+        constexpr std::array<TestData, 5> results = {{
+            {1, 0b1U, bitpacker::sign_extend<int16_t>(0x01U, 1), -1},
+            {2, 0b1U, bitpacker::sign_extend<int16_t>(0x01U, 2),  1},
+            {9, 0b1U, bitpacker::sign_extend<int16_t>(0x01U, 9),  1},
+            {2, 0b10U, bitpacker::sign_extend<int16_t>(0b10U, 2), static_cast<int16_t>(0xfffe) },
+            {3, 0b10U, bitpacker::sign_extend<int16_t>(0b10U, 3), static_cast<int16_t>(0x02) },
+        }};
+
+        for (const auto& [bit_size, input, const_result, expected] : results) {
+            INFO("with bit_size of " << std::hex << bit_size << " we expect sign extending " << input << " to result in " << std::dec << expected);
+            REQUIRE(const_result == expected);
+            REQUIRE(bitpacker::sign_extend<int16_t>(input, bit_size) == expected);
+        }
+    }
+
+}
 
 TEST_CASE("unsigned type alias", "[bit][util]") {
     STATIC_REQUIRE(std::is_same<bitpacker::unsigned_type<0>, uint8_t>::value);

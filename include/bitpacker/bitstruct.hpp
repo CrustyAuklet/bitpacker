@@ -249,7 +249,7 @@ namespace bitpacker {
                     val = reverse_bits<decltype(val), UnpackedType::bits>(val);
                 }
                 if constexpr (UnpackedType::format == 's') {
-                    return sign_extend<decltype(val), UnpackedType::bits>(val);
+                    return sign_extend<typename UnpackedType::return_type, UnpackedType::bits>(val);
                 }
                 return val;
             }
