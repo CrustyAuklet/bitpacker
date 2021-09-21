@@ -55,7 +55,7 @@
 #endif  // end test for constexpr algorithms
 
 // check for c++20 bit header and operations
-#if __has_include(<bit>)
+#if bitpacker_CPP20_OR_GREATER && __has_include(<bit>)
 #include <bit>
 #endif
 #if __cpp_lib_bitops >= 201907L

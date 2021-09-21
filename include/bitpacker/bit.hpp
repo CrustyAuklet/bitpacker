@@ -11,15 +11,33 @@
 #ifndef BITPACKER_BIT_HPP
 #define BITPACKER_BIT_HPP
 #include <climits>
-//#include <cstddef>
+#include <cstdlib>
 #include <cstdint>
-//#include <limits>
-//#include <tuple>
 #include <type_traits>
 
 #include "platform.hpp"
 
+#ifndef BITPACKER_NO_INTRINSICS
+#define BITPACKER_NO_INTRINSICS 0
+#endif
+#define BITPACKER_MSVC_INTRINSICS (!BITPACKER_NO_INTRINSICS && defined(_MSC_VER) && !defined(_DEBUG)) // The debug version of the runtime lacks the intrinsics we need
+#define BITPACKER_GNU_INTRINSICS (!BITPACKER_NO_INTRINSICS && (defined(__llvm__) || (defined(__GNUC__) && !defined(__ICC))))
+#define BITPACKER_ICC_INTRINSICS (!BITPACKER_NO_INTRINSICS && defined(__INTEL_COMPILER))
+
 namespace bitpacker {
+
+    namespace impl {
+        // use C++20 if available, otherwise an intrinsic or pessimistic answer
+        constexpr bool is_runtime_evaluated() {
+#if BITPACKER_HAVE_IS_CONSTANT_EVALUTATED
+            return std::is_constant_evaluated();
+#elif BITPACKER_GNU_INTRINSICS  // defined for both GCC and clang
+            return __builtin_is_constant_evaluated();
+#else // if it is runtime or we can't tell then don't use intrinsics in constexpr functions (pessimistic)
+            return false;
+#endif
+        }
+    }  // namespace impl
 
     /**
      * Checks if the given bit offset is aligned with respect to the systems byte representation
@@ -73,7 +91,7 @@ namespace bitpacker {
     constexpr typename T sign_extend(const typename std::make_unsigned<T>::type val, std::size_t bit_size) noexcept {
         using return_type = typename std::make_signed<T>::type;
         static_assert(std::is_signed<T>::value && std::is_integral<T>::value, "Type to convert to needs to be a signed integral type");
-        const auto shift_amount = (sizeof(T)*8U) - bit_size;
+        const auto shift_amount = (sizeof(T) * 8U) - bit_size;
         return (static_cast<return_type>(val << shift_amount) >> shift_amount);
     }
 
@@ -87,11 +105,13 @@ namespace bitpacker {
      * @param val the value to convert from a BITS wide value to a signed value of T
      * @return the passed in value sign extended into type T
      */
-    template <typename T, size_type BITS>
+    template<typename T, size_type BITS>
     constexpr T sign_extend(const typename std::make_unsigned<T>::type val) noexcept {
         static_assert(std::is_signed<T>::value && std::is_integral<T>::value, "Type to convert to needs to be a signed integral type");
-        static_assert(sizeof(T)*ByteSize >= BITS, "Size of output type must at least BITS bits");
-        struct { T x:BITS; } s;
+        static_assert(sizeof(T) * ByteSize >= BITS, "Size of output type must at least BITS bits");
+        struct {
+            T x : BITS;
+        } s;
         return s.x = val;
     }
 
@@ -144,6 +164,63 @@ namespace bitpacker {
         using underlying_type = unsigned_type<sizeof(val_type) * ByteSize>;
         val_type retval = val;
         return reverse_bits<underlying_type>(static_cast<underlying_type>(retval)) >> (sizeof(underlying_type) * ByteSize - BitSize);
+
+    constexpr uint8_t byte_swap(const std::uint8_t v) {
+        return v;
+    }
+
+    constexpr uint16_t byte_swap(const std::uint16_t value) {
+        if(impl::is_runtime_evaluated()) {
+#if !defined(BITPACKER_NO_INTRINSICS)
+#if BITPACKER_GNU_INTRINSICS
+            return __builtin_bswap16(value);
+#elif BITPACKER_ICC_INTRINSICS
+            return _bswap16(value);
+#elif BITPACKER_MSVC_INTRINSICS
+            return _byteswap_ushort(value);
+#endif
+#endif // BITPACKER_NO_INTRINSICS
+        }
+        const uint16_t Hi = value << 8U;
+        const uint16_t Lo = value >> 8U;
+        return Hi | Lo;
+
+    }
+
+    constexpr uint32_t byte_swap(const std::uint32_t value) {
+        if(impl::is_runtime_evaluated()) {
+#if !defined(BITPACKER_NO_INTRINSICS)
+#if BITPACKER_GNU_INTRINSICS
+            return __builtin_bswap32(value);
+#elif BITPACKER_ICC_INTRINSICS
+            return _bswap(value);
+#elif BITPACKER_MSVC_INTRINSICS
+            return _byteswap_ulong(value);
+#endif
+#endif // BITPACKER_NO_INTRINSICS
+        }
+        const uint32_t Byte0 = value & 0x000000FFU;
+        const uint32_t Byte1 = value & 0x0000FF00U;
+        const uint32_t Byte2 = value & 0x00FF0000U;
+        const uint32_t Byte3 = value & 0xFF000000U;
+        return (Byte0 << 24U) | (Byte1 << 8U) | (Byte2 >> 8U) | (Byte3 >> 24U);
+    }
+
+    constexpr uint64_t byte_swap(const std::uint64_t value) {
+        if(impl::is_runtime_evaluated()) {
+#if !defined(BITPACKER_NO_INTRINSICS)
+#if BITPACKER_GNU_INTRINSICS
+            return __builtin_bswap64(value);
+#elif BITPACKER_ICC_INTRINSICS
+            return _bswap64(value);
+#elif BITPACKER_MSVC_INTRINSICS
+            return _byteswap_uint64(value);
+#endif
+#endif // BITPACKER_NO_INTRINSICS
+        }
+        const uint64_t Hi = byte_swap(static_cast<uint32_t>(value));
+        const uint32_t Lo = byte_swap(static_cast<uint32_t>(value >> 32U));
+        return (Hi << 32U) | Lo;
     }
 
 }  // namespace bitpacker
