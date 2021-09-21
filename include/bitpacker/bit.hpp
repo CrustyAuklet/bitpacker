@@ -158,12 +158,12 @@ namespace bitpacker {
 
     /// reverses the bits in the value `val`.
     template<typename T, size_type BitSize>
-    constexpr auto reverse_bits(std::remove_cv_t<T> val) noexcept {
-        using val_type = std::remove_reference_t<std::remove_cv_t<T>>;
-        static_assert(std::is_integral<val_type>::value, "bitpacker::reverse_bits: val needs to be an integral type");
-        using underlying_type = unsigned_type<sizeof(val_type) * ByteSize>;
-        val_type retval = val;
-        return reverse_bits<underlying_type>(static_cast<underlying_type>(retval)) >> (sizeof(underlying_type) * ByteSize - BitSize);
+    constexpr auto reverse_bits(const typename std::remove_cv<typename std::remove_reference<T>::type>::type val) noexcept {
+        using arg_type = typename std::remove_cv<typename std::remove_reference<T>::type>::type;
+        using underlying_type = unsigned_type<sizeof(arg_type) * ByteSize>;
+        static_assert(std::is_integral<arg_type>::value, "bitpacker::reverse_bits: val needs to be an integral type");
+        return reverse_bits<underlying_type>(static_cast<underlying_type>(val)) >> (sizeof(underlying_type) * ByteSize - BitSize);
+    }
 
     constexpr uint8_t byte_swap(const std::uint8_t v) {
         return v;
