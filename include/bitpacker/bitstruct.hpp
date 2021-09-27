@@ -410,7 +410,8 @@ namespace bitpacker {
 
         /// helper function to pack types into the given buffer
         template<typename Fmt, size_type N, size_type... Items, typename... Args>
-        constexpr void pack(std::array<byte_type, N>& output, const size_type start_bit, std::index_sequence<Items...> /*unused*/, Args&&... args) {
+        constexpr void pack(span<byte_type, N> output, const size_type start_bit, std::index_sequence<Items...> /*unused*/, Args&&... args) {
+            static_assert(calcbytes(Fmt{}) <= N, "bitpacker::pack : format larger than given array, not even counting the offset!");
             static_assert(sizeof...(args) == sizeof...(Items), "pack expected items for packing != sizeof...(args) passed");
             constexpr auto byte_order = impl::get_byte_order(Fmt{});
             static_assert(byte_order == impl::Endian::big, "Unpacking little endian byte order not supported yet...");
@@ -501,21 +502,20 @@ namespace bitpacker {
     template<typename Fmt, typename... Args>
     constexpr auto pack(Fmt /*unused*/, Args&&... args) {
         std::array<byte_type, calcbytes(Fmt{})> output{};
-        impl::pack<Fmt>(output, 0, std::make_index_sequence<impl::count_non_padding(Fmt{})>(), std::forward<Args>(args)...);
+        impl::pack<Fmt>(span(output), 0, std::make_index_sequence<impl::count_non_padding(Fmt{})>(), std::forward<Args>(args)...);
         return output;
     }
 
     /**
      * Pack Args... into data, starting at given bit offset offset, according to given format string fmt.
      * @param fmt [IN] format string created with macro `BP_STRING()`
-     * @param data [IN/OUT] reference to existing std::array of bytes to pack into
+     * @param data [IN/OUT] reference to a fixed size span of bytes to pack into
      * @param offset [IN] bit index to start unpacking from
      * @param args... [IN] list of arguments to pack into the format string
      */
-    template<typename Fmt, size_type N, typename... Args>
-    constexpr void pack_into(Fmt /*unused*/, std::array<byte_type, N>& data, const size_type offset, Args&&... args) {
-        static_assert(calcbytes(Fmt{}) <= N, "bitpacker::pack_into : format larger than given array, not even counting the offset!");
-        impl::pack<Fmt>(data, offset, std::make_index_sequence<impl::count_non_padding(Fmt{})>(), std::forward<Args>(args)...);
+    template<typename Fmt, typename Output, typename... Args>
+    constexpr void pack_into(Fmt /*unused*/, Output& data, const size_type offset, Args&&... args) {
+        impl::pack<Fmt>(span(data), offset, std::make_index_sequence<impl::count_non_padding(Fmt{})>(), std::forward<Args>(args)...);
     }
 
 }  // namespace bitpacker
