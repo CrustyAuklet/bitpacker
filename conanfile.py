@@ -32,7 +32,7 @@ class BitpackerConan(ConanFile):
 
     def requirements(self):
         if not tools.valid_min_cppstd(self, "20"):
-            self.requires("span-lite/0.7.0")
+            self.requires("span-lite/0.10.1")
 
     def build_requirements(self):
         if tools.get_env("CONAN_RUN_TESTS", True) or self.develop:

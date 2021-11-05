@@ -13,6 +13,7 @@
 
 #define CATCH_CONFIG_ENABLE_TUPLE_STRINGMAKER
 #include "test_common.hpp"
+#include "bitpacker/bitstruct.hpp"
 
 template < typename T >
 std::string escapeString(const T &val)
